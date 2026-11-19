@@ -21,8 +21,11 @@ const menuButton = document.querySelector('.menu-button');
 const stamp = new Intl.DateTimeFormat('en-GB', {
   day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', hourCycle: 'h23', timeZone: 'Asia/Singapore'
 });
-let storage;
-let shared = false;
+let database;
+let storageOpenError;
+let legacyStorage;
+let tabStorage;
+let notifications;
 let state;
 let loadError = false;
 let busy = false;
@@ -53,25 +56,34 @@ function initialState() {
   // Sample order URLs survive a reset, but each new opening gets its own receipt.
   return { version: 1, now, ledger: demoLedger(now, () => uniqueId('req_')) };
 }
-function findStorage() {
-  // Without a cross-tab lock, keep each tab's simulation independent.
-  const candidates = navigator.locks ? ['localStorage', 'sessionStorage'] : ['sessionStorage'];
-  for (const name of candidates) {
-    try {
-      const target = window[name];
+function availableStorage(name) {
+  try {
+    const target = window[name];
+    const saved = target.getItem(STORE_KEY);
+    if (name === 'sessionStorage' && saved == null) {
       const probe = STORE_KEY + '.probe';
       target.setItem(probe, '1');
       target.removeItem(probe);
-      storage = target;
-      shared = name === 'localStorage';
-      return;
-    } catch { /* Restricted browsers can still run an in-memory simulation. */ }
+    }
+    return target;
+  } catch { return null; }
+}
+async function openDatabase() {
+  try {
+    if (!window.indexedDB) return null;
+    return await new Promise((resolve, reject) => {
+      const request = window.indexedDB.open(STORE_KEY, 1);
+      request.onupgradeneeded = () => request.result.createObjectStore('simulation');
+      request.onerror = () => reject(request.error);
+      request.onsuccess = () => resolve(request.result);
+    });
+  } catch (error) {
+    if (['SecurityError', 'InvalidStateError', 'NotAllowedError'].includes(error.name)) return null;
+    throw error;
   }
 }
-function readState() {
-  const raw = storage?.getItem(STORE_KEY);
-  if (raw == null) return storage ? null : state;
-  if (raw.length > 1_650_000) throw new Error('The saved demo is too large to read.');
+function parseState(raw) {
+  if (typeof raw !== 'string' || raw.length > 1_650_000) throw new Error('The saved demo data is invalid or too large.');
   const saved = JSON.parse(raw);
   if (saved?.version !== 1 || !Number.isSafeInteger(saved.now) || saved.now < 0 || saved.now > 8_640_000_000_000_000)
     throw new Error('The saved simulation clock is invalid.');
@@ -79,19 +91,57 @@ function readState() {
   if (saved.ledger.actions.some(entry => entry.at > saved.now)) throw new Error('The saved clock precedes a recorded event.');
   return saved;
 }
-function saveState(next) {
-  if (storage) storage.setItem(STORE_KEY, JSON.stringify(next));
-  state = next;
+function snapshot(raw, change, reset) {
+  const current = reset || raw === undefined ? initialState() : parseState(raw);
+  const next = change ? change(current) : current;
+  return { next, raw: !reset && raw !== undefined && next === current ? raw : JSON.stringify(next) };
 }
-async function locked(callback) {
-  return shared ? navigator.locks.request(STORE_KEY, callback) : callback();
+function legacySnapshot() {
+  return legacyStorage?.getItem(STORE_KEY) ?? undefined;
 }
-async function updateState(change) {
-  return locked(() => {
-    const current = readState() ?? initialState();
-    const next = change(current);
-    saveState(next);
+function transactState(change, reset) {
+  // A Web Lock can order tabs while their localStorage caches still disagree.
+  // Read the current receipt and write its successor in one IndexedDB transaction.
+  return new Promise((resolve, reject) => {
+    const transaction = database.transaction('simulation', 'readwrite');
+    const store = transaction.objectStore('simulation');
+    const read = store.get('state');
+    let result, changed, failed;
+    read.onsuccess = () => {
+      try {
+        const previous = read.result;
+        result = snapshot(previous === undefined && !reset ? legacySnapshot() : previous, change, reset);
+        changed = result.raw !== previous;
+        if (changed) store.put(result.raw, 'state');
+      } catch (error) {
+        failed = error;
+        transaction.abort();
+      }
+    };
+    transaction.onabort = () => reject(failed ?? transaction.error);
+    transaction.oncomplete = () => {
+      state = result.next;
+      if (changed) {
+        try {
+          if (notifications) notifications.postMessage(null);
+          else legacyStorage?.setItem(STORE_KEY + '.changed', uniqueId('req_'));
+        } catch { /* An unavailable notification channel does not undo the commit. */ }
+      }
+      resolve();
+    };
   });
+}
+function updateState(change, reset = false) {
+  const update = () => {
+    if (storageOpenError) throw storageOpenError;
+    if (database) return transactState(change, reset);
+    // Restricted browsers keep mutations tab-local. A v1.1 save can still be opened.
+    const previous = tabStorage ? tabStorage.getItem(STORE_KEY) : state && JSON.stringify(state);
+    const result = snapshot(previous ?? (reset ? undefined : legacySnapshot()), change, reset);
+    if (result.raw !== previous) tabStorage?.setItem(STORE_KEY, result.raw);
+    state = result.next;
+  };
+  return navigator.locks ? navigator.locks.request(STORE_KEY, update) : update();
 }
 function uniqueId(prefix) {
   if (globalThis.crypto?.randomUUID) return prefix + crypto.randomUUID();
@@ -326,7 +376,7 @@ async function perform(action, id, opening) {
   busy = true;
   try {
     if (action === 'reset') {
-      await locked(() => saveState(initialState()));
+      await updateState(null, true);
       loadError = false;
       railFilter = 'all';
       checkout = { rail: 'card', days: 2 };
@@ -479,16 +529,43 @@ document.querySelector('.skip').addEventListener('click', event => {
   main.scrollIntoView({ block: 'start' });
 });
 document.addEventListener('keydown', event => { if (event.key === 'Escape' && menu.classList.contains('open')) { closeMenu(); menuButton.focus(); } });
-window.addEventListener('storage', event => {
-  if (!shared || (event.key !== STORE_KEY && event.key !== null)) return;
-  try { state = readState() ?? initialState(); loadError = false; }
+async function refreshSharedState() {
+  let changed = loadError;
+  try {
+    await updateState(current => {
+      changed = changed || JSON.stringify(current) !== JSON.stringify(state);
+      return current;
+    });
+    if (!changed) return;
+    loadError = false;
+  }
   catch { loadError = true; }
-  if (dialog.open) dialog.close();
+  const wasReviewing = dialog.open;
+  if (wasReviewing) dialog.close();
   render();
-});
+  if (wasReviewing) {
+    const detail = document.querySelector('#order-detail');
+    if (detail) focusOrder();
+    else main.focus({ preventScroll: true });
+  }
+}
 async function boot() {
-  findStorage();
-  try { await locked(() => { const current = readState(); if (current) state = current; else saveState(initialState()); }); }
+  legacyStorage = availableStorage('localStorage');
+  tabStorage = availableStorage('sessionStorage');
+  // A sessionStorage save belongs to this tab, including an existing v1.1 order.
+  try { if (tabStorage?.getItem(STORE_KEY) == null) database = await openDatabase(); }
+  catch (error) { storageOpenError = error; }
+  if (database) {
+    try { notifications = new BroadcastChannel(STORE_KEY); } catch { /* Use storage events where available. */ }
+    if (notifications) notifications.onmessage = refreshSharedState;
+    else {
+      window.addEventListener('storage', event => {
+        if (event.key === STORE_KEY + '.changed') refreshSharedState();
+      });
+      window.addEventListener('focus', refreshSharedState);
+    }
+  }
+  try { await updateState(); }
   catch { loadError = true; }
   // Navigation during the initial storage lock is picked up by this first render.
   window.addEventListener('hashchange', onRouteChange);

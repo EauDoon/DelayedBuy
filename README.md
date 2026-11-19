@@ -53,6 +53,8 @@ python3 tests/browser_smoke.py --standalone "$stage/delayedbuy-demo.html"
 
 The browser suite uses Python Playwright (CI pins `playwright==1.62.0`) and Chromium. Set `CHROMIUM_BIN` if your Chromium executable is outside the usual path. The app and other checks require no package installation beyond standard Node and Python runtimes. Site packaging expects a new or empty destination. Refreshing or clearing this browser’s storage affects only its demo state. Browser storage is not an authentication boundary or a settlement system.
 
+On first open, v1.2 imports a shared v1.1 save into IndexedDB with its original clock and ledger. Existing tab-only saves stay in their tab. Shared tabs check the latest saved hold inside a single transaction before recording a decision. If another tab changes the demo clock while checkout is waiting to save, the shopper reviews the revised purchase time before creating the hold.
+
 The offline report uses `economics/sensitivity.csv` for its 64 card cases and `economics/scenarios.csv` for the fixed funding comparison. The downloadable sensitivity CSV stores APRs as fractions (0.04 means 4%). Its break-even APRs are continuous estimates before whole-cent settlement rounding. Browser tests cover the report and the checkout, including Back navigation during a confirmation, keyboard focus restoration and a queued checkout that must not override later navigation.
 
 **Static hosting:** the prebuilt `docs/` directory contains only the standalone simulator and `.nojekyll`. To enable GitHub Pages, select **Settings → Pages → Deploy from a branch → main → /docs**. Publication of the source does not itself enable hosting.

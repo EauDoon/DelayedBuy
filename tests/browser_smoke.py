@@ -72,13 +72,21 @@ class Run:
         self.attempts = []
         self.local_paths = set()
 
-    def case(self, name, fn, width=1280, height=850, mobile=False, javascript=True):
+    def case(self, name, fn, width=1280, height=850, mobile=False, javascript=True, legacy_raw=None, init_script=None):
         record = {'case': name, 'viewport': [width, height], 'status': 'failed'}
         before = time.monotonic()
         alerts = []
+        storage_state = None
+        if legacy_raw is not None:
+            url = urlsplit(self.url)
+            storage_state = {'cookies': [], 'origins': [{'origin': f'{url.scheme}://{url.netloc}',
+                             'localStorage': [{'name': KEY, 'value': legacy_raw}]}]}
         context = self.browser.new_context(viewport={'width': width, 'height': height},
                                            is_mobile=mobile, has_touch=mobile, java_script_enabled=javascript,
+                                           storage_state=storage_state,
                                            timezone_id='Asia/Singapore', service_workers='block')
+        if init_script:
+            context.add_init_script(init_script)
         context.set_default_timeout(4500)
         context.expose_binding('recordPaymentAttempt', lambda _, name: alerts.append(f'Unexpected payment API: {name}'))
         # An isolated, inert provider catches unexpected signing/account requests in a wallet-enabled browser.
@@ -211,9 +219,7 @@ def reserve(page, base, rail, days=2):
     page.locator('#checkout-form button[type=submit]').click()
     expect(page.locator('[data-action=cancel]')).to_be_visible()
     expect(page.locator('[data-action=complete]')).to_be_disabled()
-    raw = page.evaluate('(key) => localStorage.getItem(key)', KEY)
-    assert raw, 'No persisted simulation after reservation'
-    return json.loads(raw)
+    return stored(page)
 
 
 def act(page, choice):
@@ -231,8 +237,34 @@ def clock_unlock(page):
     expect(page.locator('[data-action=complete]')).to_be_enabled()
 
 
+READ_ONLY = object()
+
+
+def saved_raw(page, replacement=READ_ONLY):
+    """Read committed state or install an explicit fixture in this isolated browser context."""
+    read_only = replacement is READ_ONLY
+    return page.evaluate("""([name, readOnly, replacement]) => new Promise((resolve, reject) => {
+        const open = indexedDB.open(name);
+        open.onupgradeneeded = () => open.transaction.abort();
+        open.onerror = () => reject(open.error);
+        open.onsuccess = () => {
+            const db = open.result;
+            if (!db.objectStoreNames.contains('simulation')) {
+                db.close();
+                reject(new Error('Missing simulator object store'));
+                return;
+            }
+            const tx = db.transaction('simulation', readOnly ? 'readonly' : 'readwrite');
+            const store = tx.objectStore('simulation');
+            const req = readOnly ? store.get('state') : store.put(replacement, 'state');
+            tx.oncomplete = () => { db.close(); resolve(req.result); };
+            tx.onabort = () => { db.close(); reject(tx.error); };
+        };
+    })""", [KEY, read_only, None if read_only else replacement])
+
+
 def stored(page):
-    return json.loads(page.evaluate('(key) => localStorage.getItem(key)', KEY))
+    return json.loads(saved_raw(page))
 
 
 def actions(snapshot):
@@ -420,27 +452,35 @@ def keyboard_flow(page, base):
             'four_answers_before_submit': True, 'saved_price': '135.00 USDC', 'buy_from_sgt': sgt(now + 7 * DAY_MS)}
 
 
-def saved_v11_decisions(page, base):
+def v11_snapshot():
     # Original v1.1 demoLedger seed (10f2354), including its stable request IDs and storage envelope.
     now = 1_700_000_000_000
     history = [
         dict(type='hold', requestId='req_daypack_hold', orderId='ord_daypack', item='Canvas daypack',
-             rail='card', source='card_demo', amount=8_500, at=now - 4 * DAY_MS, holdMs=2 * DAY_MS),
+             rail='card', amount=8_500, source='card_demo', at=now - 4 * DAY_MS, holdMs=2 * DAY_MS),
         dict(type='hold', requestId='req_studio_hold', orderId='ord_studio', item='Studio headphones',
-             rail='usdc', source='wallet_demo', amount=120_000_000, at=now - 3 * DAY_MS, holdMs=2 * DAY_MS),
+             rail='usdc', amount=120_000_000, source='wallet_demo', at=now - 3 * DAY_MS, holdMs=2 * DAY_MS),
         dict(type='complete', requestId='req_daypack_complete', orderId='ord_daypack', at=now - DAY_MS),
         dict(type='hold', requestId='req_arc_hold', orderId='ord_arc', item='Arc table lamp',
-             rail='card', source='card_demo', amount=18_000, at=now - DAY_MS, holdMs=3 * DAY_MS),
+             rail='card', amount=18_000, source='card_demo', at=now - DAY_MS, holdMs=3 * DAY_MS),
     ]
-    # Restore a saved browser clock one millisecond before the card hold unlocks.
+    return dict(version=1, now=now, ledger=dict(version=1, actions=history))
+
+
+def saved_v11_decisions(page, base):
+    snapshot = v11_snapshot()
+    history = actions(snapshot)
     unlock = history[3]['at'] + history[3]['holdMs']
-    snapshot = dict(version=1, now=unlock - 1, ledger=dict(version=1, actions=history))
-    page.evaluate('([k, v]) => localStorage.setItem(k, JSON.stringify(v))', [KEY, snapshot])
-    page.reload(wait_until='load')
     visit(page, base, 'customer/ord_arc')
+    original_raw = page.evaluate('key => localStorage.getItem(key)', KEY)
+    assert saved_raw(page) == original_raw and stored(page) == snapshot
+    # Place only the test clock one millisecond before unlock, after checking the genuine v1.1 import.
+    before_unlock = dict(snapshot, now=unlock - 1)
+    saved_raw(page, replacement=json.dumps(before_unlock))
+    page.reload(wait_until='load')
     expect(page.locator('[data-action=complete]')).to_be_disabled()
     expect(page.locator('[data-action=cancel]')).to_be_enabled()
-    assert stored(page) == snapshot
+    assert stored(page) == before_unlock
     clock_unlock(page)
     assert stored(page)['now'] == unlock
     assert actions(stored(page)) == history
@@ -470,30 +510,63 @@ def saved_v11_decisions(page, base):
         final = actions(stored(page))
         assert final[:-1] == before
         assert (final[-1]['type'], final[-1]['orderId']) == ('cancel', opened['orderId'])
+    page.reload(wait_until='load')
+    expect(page.locator('#order-detail .status')).to_have_text('Refunded')
+    assert actions(stored(page)) == final
     return {'v1_1_openings': [history[3]['requestId'], history[1]['requestId']],
             'one_ms_before': 'waiting', 'at_unlock': 'open', 'after_advance_and_reload': 'open',
             'purchase_dialog_dismissed_without_movement': True, 'canceled_after_unlock': ['card', 'usdc']}
 
 
-def corrupted_store(page, base):
-    visit(page, base, 'customer')
-    broken = '{unreadable-demo-state'
-    page.evaluate('([key, value]) => localStorage.setItem(key, value)', [KEY, broken])
+BROKEN_SAVE = '{unreadable-demo-state'
+
+
+def corrupted_store(page, base, legacy=False, damaged=BROKEN_SAVE):
+    if not legacy:
+        visit(page, base, 'customer')
+        saved_raw(page, replacement=damaged)
+    else:
+        page.goto(base + '#customer')
+    def damaged_bytes():
+        if legacy:
+            return page.evaluate('key => localStorage.getItem(key)', KEY)
+        return saved_raw(page)
+
     page.reload(wait_until='load')
     panel = page.locator('.error-panel')
     expect(panel).to_be_visible()
-    assert page.evaluate('(key) => localStorage.getItem(key)', KEY) == broken, 'Unreadable history overwritten'
+    assert damaged_bytes() == damaged, 'Unreadable history overwritten'
     expect(page.locator('[data-action=complete], [data-action=cancel]')).to_have_count(0)
     title = panel.locator('h1').inner_text()
     panel.locator('[data-action=reset]').click()
     page.locator('[data-dismiss]').click()
-    assert page.evaluate('(key) => localStorage.getItem(key)', KEY) == broken
+    assert damaged_bytes() == damaged
     panel.locator('[data-action=reset]').click()
     page.locator('[data-confirm]').click()
     expect(page.locator('.order-list .order-btn')).to_have_count(3)
     assert len(actions(stored(page))) == 4
+    page.reload(wait_until='load')
+    expect(page.locator('.order-list .order-btn')).to_have_count(3)
     return {'corrupt_data_preserved_until_confirmation': True, 'payments_unavailable_while_corrupt': True,
             'confirmed_reset_recovers_sample_orders': 3, 'message': title}
+
+
+def legacy_session_fallback(page, base):
+    # Without IndexedDB, a v1.1 snapshot remains usable in a tab-local session.
+    snapshot = v11_snapshot()
+    visit(page, base, 'customer/ord_studio')
+    saved_terms(page, actions(snapshot)[1], '120.00 USDC')
+    act(page, 'cancel')
+    page.reload(wait_until='load')
+    expect(page.locator('#order-detail .status')).to_have_text('Refunded')
+    own = json.loads(page.evaluate('key => sessionStorage.getItem(key)', KEY))
+    assert actions(own)[:-1] == actions(snapshot)
+    assert (actions(own)[-1]['type'], actions(own)[-1]['orderId']) == ('cancel', 'ord_studio')
+    assert json.loads(page.evaluate('key => localStorage.getItem(key)', KEY)) == snapshot
+    other = page.context.new_page()
+    visit(other, base, 'customer/ord_studio')
+    expect(other.locator('#order-detail .status')).to_have_text('Ready to decide')
+    return {'legacy_hold_refunded': True, 'survived_reload': True, 'independent_second_tab': True}
 
 
 def report_interaction(page, base):
@@ -544,10 +617,10 @@ def queued_checkout_navigation(page, base):
     page.locator('#primary-nav a[href="#merchant"]').click()
     expect(page.locator('#rail-filter')).to_be_visible()
     page.evaluate('() => window.testRelease()')
-    page.wait_for_function("([k, n]) => JSON.parse(localStorage.getItem(k)).ledger.actions.length === n+1", arg=[KEY,old_count])
     expect(page.locator('#rail-filter')).to_be_visible()
     assert page.url.endswith('#merchant')
     expect(page.locator('[data-totals="card"] .big')).to_have_text('S$360.00')
+    assert len(actions(stored(page))) == old_count + 1
     return {'exactly_one_new_hold': True, 'newer_route_preserved': True}
 
 
@@ -609,6 +682,14 @@ def reset_during_confirmation(page, base):
     # Model a reset in the same clock tick. The replacement has the same date and order URL.
     merchant.clock.set_fixed_time(datetime.fromtimestamp(before['now'] / 1000, timezone.utc))
     page.locator('[data-action=cancel]').click()
+    # A renderer can retain its pre-reset localStorage snapshot while another tab holds the lock.
+    page.evaluate("""([key, snapshot]) => {
+        const read = Storage.prototype.getItem;
+        Storage.prototype.getItem = function(name) {
+            if (this === localStorage && name === key) return snapshot;
+            return read.call(this, name);
+        };
+    }""", [KEY, json.dumps(before)])
     merchant.locator('[data-action=reset]').click()
 
     # Queue the reset ahead of the already-reviewed decision using the real cross-tab lock.
@@ -658,8 +739,16 @@ def main():
         run.case('Merchant totals and event filters reconcile across rails', merchant_reconciliation)
         run.case('Paired merchant rehearsal', merchant_rehearsal)
         run.case('Keyboard navigation through checkout and confirmation', keyboard_flow)
-        run.case('Saved v1.1 holds stay open across unlock and allow cancellation on both rails', saved_v11_decisions)
+        legacy_raw = json.dumps(v11_snapshot(), separators=(',', ':'))
+        run.case('Saved v1.1 holds stay open across unlock and allow cancellation on both rails', saved_v11_decisions,
+                 legacy_raw=legacy_raw)
         run.case('Unreadable saved data is preserved with safe recovery options', corrupted_store)
+        run.case('A damaged null record requires explicit reset', partial(corrupted_store, damaged=None))
+        run.case('Unreadable v1.1 data survives first open until explicit reset', partial(corrupted_store, legacy=True),
+                 legacy_raw=BROKEN_SAVE)
+        run.case('A saved v1.1 hold works per tab when IndexedDB is unavailable', legacy_session_fallback,
+                 legacy_raw=legacy_raw,
+                 init_script="Object.defineProperty(window, 'indexedDB', {value: undefined})")
         for w, h in [(320, 740), (390, 844), (768, 1024), (1280, 850)]:
             run.case(f'Route fit, labels and checkout fields at {w}px', partial(viewport_check, screenshots=args.screenshots), w, h, w < 600)
         run.case('Mobile hold setup, confirmation and Back', landing_to_hold, 390, 844, True)
@@ -853,7 +942,7 @@ def no_script_explanation(page, base):
 
 
 def standalone_without_storage(page, base):
-    page.add_init_script("""for (const name of ['localStorage', 'sessionStorage']) {
+    page.add_init_script("""for (const name of ['indexedDB', 'localStorage', 'sessionStorage']) {
         Object.defineProperty(window, name, {get() { throw new DOMException('Storage unavailable', 'SecurityError'); }});
     }""")
     page.reload(wait_until='load')
