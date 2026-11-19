@@ -250,11 +250,68 @@ def viewport_check(page, base, screenshots=None):
     return measurements
 
 
+def landing_to_hold(page, base):
+    visit(page, base, 'home')
+    wait = page.get_by_label('Waiting period', exact=True)
+    wait.select_option('7')
+    setup = page.get_by_role('link', name='Set up my hold')
+    expect(setup).to_be_in_viewport()
+    setup.focus()
+    page.keyboard.press('Enter')
+    expect(page.locator('input[name=days][value="7"]')).to_be_checked()
+    before = len(actions(stored(page)))
+    submit = page.get_by_role('button', name='Create demo hold')
+    submit.focus()
+    page.keyboard.press('Enter')
+    detail = page.locator('#order-detail')
+    expect(detail).to_be_focused()
+    expect(detail.locator('.status')).to_be_in_viewport()
+    expect(detail).to_contain_text('7 days left')
+    cancel = detail.get_by_role('button', name='Cancel hold')
+    cancel.focus()
+    page.keyboard.press('Enter')
+    dialog = page.get_by_role('dialog', name='Cancel this hold?')
+    expect(dialog).to_have_accessible_description(re.compile(r'S\$180\.00.*demo card'))
+    expect(dialog.get_by_role('button', name='Go back')).to_be_focused()
+    page.keyboard.press('Escape')
+    expect(cancel).to_be_focused()
+    assert len(actions(stored(page))) == before + 1
+    page.go_back()
+    expect(page.locator('input[name=days][value="7"]')).to_be_checked()
+    page.go_back()
+    expect(wait).to_have_value('7')
+    assert len(actions(stored(page))) == before + 1
+    return {'wait_days': 7, 'new_holds': 1, 'dismissed_without_refund': True}
+
+
+def report_shortcut(page, base):
+    visit(page, base, 'report')
+    button = page.get_by_role('button', name='Explore the scenarios')
+    button.focus()
+    page.keyboard.press('Enter')
+    expect(page.get_by_label('Basket', exact=True)).to_be_focused()
+    expect(page.locator('.r-comparison')).to_contain_text('−S$0.0950')
+    page.get_by_label('Basket', exact=True).select_option('25')
+    expect(page.locator('.r-comparison')).to_contain_text('S$100 equivalent basket')
+    page.get_by_text('Read the assumptions and limits', exact=True).click()
+    with page.expect_download() as saved:
+        page.get_by_role('link', name='Download the 64 card-funded cases (CSV)').click()
+    assert saved.value.suggested_filename == 'sensitivity.csv'
+    assert Path(saved.value.path()).read_text() == (ROOT / 'economics/sensitivity.csv').read_text()
+    return {'keyboard_shortcut': True, 'fixed_wallet_example': True, 'offline_csv_matched': True}
+
+
 def mobile_navigation(page, base):
     visit(page, base, 'home')
     menu = page.get_by_role('button', name='Open menu')
     expect(menu).to_be_visible()
-    menu.click()
+    menu.focus()
+    page.keyboard.press('Enter')
+    page.keyboard.press('Tab')
+    expect(page.locator('#primary-nav a').first).to_be_focused()
+    page.keyboard.press('Escape')
+    expect(menu).to_be_focused()
+    page.keyboard.press('Enter')
     toggler = page.locator('button[aria-controls="primary-nav"]')
     expect(toggler).to_have_attribute('aria-expanded', 'true')
     page.locator('#primary-nav').get_by_role('link', name='Merchant view').click()
@@ -387,11 +444,19 @@ def review_viewports(browser):
             context = browser.new_context(viewport={'width': width, 'height': height},
                                           timezone_id='Asia/Singapore', device_scale_factor=1)
             page = context.new_page()
-            for route in ('home', 'checkout', 'customer', 'merchant', 'report'):
-                page.goto(url + '#' + route)
+            for route in ('home', 'how', 'checkout', 'customer', 'dialog', 'merchant', 'report', 'scenarios', 'comparison'):
+                target = {'dialog': 'customer/ord_arc', 'scenarios': 'report', 'comparison': 'report'}.get(route, route)
+                page.goto(url + '#' + target)
                 expect(page.locator('main h1')).to_be_visible()
                 expect(page.locator('main .boot')).to_have_count(0)
                 page.evaluate('() => Promise.all(Array.from(document.images, img => img.decode()))')
+                if route == 'how':
+                    page.locator('#how').evaluate("el => el.scrollIntoView()")
+                elif route == 'dialog':
+                    page.locator('[data-action=cancel]').click()
+                elif route in ('scenarios', 'comparison'):
+                    selector = '.r-controls-head' if route == 'scenarios' else '.r-comparison'
+                    page.locator(selector).evaluate("el => el.scrollIntoView()")
                 encoded = base64.b64encode(page.screenshot()).decode()
                 stamp = page.evaluate('''async ({encoded, width}) => {
                   const img = new Image();
@@ -432,6 +497,8 @@ def main():
         run.case('Unreadable saved data is preserved with safe recovery options', corrupted_store)
         for w, h in [(320, 740), (390, 844), (768, 1024), (1280, 850)]:
             run.case(f'Route fit, labels and checkout fields at {w}px', partial(viewport_check, screenshots=args.screenshots), w, h, w < 600)
+        run.case('Mobile hold setup, confirmation and Back', landing_to_hold, 390, 844, True)
+        run.case('Keyboard scenario shortcut and offline CSV', report_shortcut)
         run.case('Mobile menu opens, navigates and closes', mobile_navigation, 390, 844, True)
         run.case('Scenario report thresholds and accessible controls', report_interaction)
         run.case('Back closes an obsolete confirmation', stale_confirmation)
