@@ -373,6 +373,47 @@ def queued_checkout_navigation(page, base):
     return {'exactly_one_new_hold': True, 'newer_route_preserved': True}
 
 
+def reset_during_confirmation(page, base):
+    visit(page, base, 'customer/ord_arc')
+    before = stored(page)
+    merchant = page.context.new_page()
+    visit(merchant, base, 'merchant')
+
+    # Model a reset in the same clock tick. The replacement has the same date and order URL.
+    merchant.clock.set_fixed_time(datetime.fromtimestamp(before['now'] / 1000, timezone.utc))
+    page.locator('[data-action=cancel]').click()
+    merchant.locator('[data-action=reset]').click()
+
+    # Queue the reset ahead of the already-reviewed decision using the real cross-tab lock.
+    merchant.evaluate("""key => {
+        navigator.locks.request(key, () => new Promise(resolve => { window.releaseQueue = resolve; }));
+    }""", KEY)
+    merchant.wait_for_function("typeof window.releaseQueue === 'function'")
+    pending_count = """async ([key, n]) =>
+        (await navigator.locks.query()).pending.filter(lock => lock.name === key).length === n"""
+    merchant.locator('[data-confirm]').click()
+    page.wait_for_function(pending_count, arg=[KEY, 1])
+    page.locator('[data-confirm]').click()
+    page.wait_for_function(pending_count, arg=[KEY, 2])
+    merchant.evaluate('() => window.releaseQueue()')
+
+    expect(page.locator('#feedback')).to_contain_text('Review the current order')
+    expect(page.locator('#order-detail .status')).to_have_text('Waiting')
+    after = stored(page)
+    def opening(snapshot):
+        return next(a for a in actions(snapshot) if a['type'] == 'hold' and a['orderId'] == 'ord_arc')
+
+    original, replacement = opening(before), opening(after)
+    assert original['at'] == replacement['at']
+    assert original['requestId'] != replacement['requestId']
+    assert len(actions(after)) == len(actions(before))
+    act(page, 'cancel')
+    final = actions(stored(page))
+    assert final[:-1] == actions(after)
+    assert (final[-1]['type'], final[-1]['orderId']) == ('cancel', 'ord_arc')
+    return {'replacement_stayed_open': True, 'new_confirmation_closed_it_once': True}
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--standalone', type=Path, help='Also exercise the downloaded single HTML file.')
@@ -401,6 +442,7 @@ def main():
         run.case('Back closes an obsolete confirmation', stale_confirmation)
         run.case('Reset preserves meaningful keyboard focus', reset_focus)
         run.case('Queued checkout respects newer navigation', queued_checkout_navigation)
+        run.case('Another tab resets a hold before its queued confirmation', reset_during_confirmation)
         passed = sum(c['status'] == 'passed' for c in run.cases)
         report = {'executed_at_utc': datetime.now(timezone.utc).isoformat(),
                   'suite': 'Playwright local Chromium browser smoke checks', 'served_at': PREFIX,
