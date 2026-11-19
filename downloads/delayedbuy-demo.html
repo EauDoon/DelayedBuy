@@ -1937,7 +1937,7 @@ dialog::backdrop {
 .r-cover .r-cover-link { background: #f8b49b; color: #263d35; border: 1px solid #f5c7b6; border-radius: 5px; padding: .65rem 1rem; text-decoration: none }
 .r-cover .r-cover-link:hover { background: #ffcfb9 }
 .r-cover .r-cover-link:focus-visible { outline-color: #fff9e7 }
-.boot noscript p { max-width: 64ch; margin-top: 1rem }
+.boot-help p { max-width: 64ch; margin-top: 1rem }
 
 .r-comparison {
   padding: clamp(17px, 2.5vw, 30px);
@@ -1959,6 +1959,7 @@ dialog::backdrop {
 }
 
 </style>
+  <noscript><style>#primary-nav, .menu-button, .foot-nav { display: none }</style></noscript>
   
 </head>
 <body>
@@ -1981,8 +1982,8 @@ dialog::backdrop {
     <div class="frame boot">
       <span class="kicker">Checkout simulation</span><h1>Hold the lamp.<br><em>Decide later.</em></h1>
       <p>Reserve a fictional Arc table lamp and decide after the wait.</p>
-      <noscript><p>Enable JavaScript to choose a waiting period and try checkout. No money moves.</p>
-        <p>In the separate report model, S$100 held for seven days at an assumed 4% annual rate earns about S$0.0767 gross. The shopper’s modeled cancellation share is S$0.06. The checkout simulation pays no interest.</p></noscript>
+      <div class="boot-help"><p>Enable JavaScript to choose a waiting period and try checkout. No money moves.</p>
+        <p>In the separate report model, S$100 held for seven days at an assumed 4% annual rate earns about S$0.0767 gross. The shopper’s modeled cancellation share is S$0.06. The checkout simulation pays no interest.</p></div>
     </div>
   </main>
   <div id="feedback" role="status" aria-live="polite" aria-atomic="true"></div>

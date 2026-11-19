@@ -9,6 +9,7 @@
   <title>delayedbuy · Reserve now. Decide later.</title>
   <link rel="icon" type="image/svg+xml" href="./ui/assets/mark.svg">
   <link rel="stylesheet" href="./ui/style.css">
+  <noscript><style>#primary-nav, .menu-button, .foot-nav { display: none }</style></noscript>
   <script type="module" src="./ui/app.js"></script>
 </head>
 <body>
@@ -31,8 +32,8 @@
     <div class="frame boot">
       <span class="kicker">Checkout simulation</span><h1>Hold the lamp.<br><em>Decide later.</em></h1>
       <p>Reserve a fictional Arc table lamp and decide after the wait.</p>
-      <noscript><p>Enable JavaScript to choose a waiting period and try checkout. No money moves.</p>
-        <p>In the separate report model, S$100 held for seven days at an assumed 4% annual rate earns about S$0.0767 gross. The shopper’s modeled cancellation share is S$0.06. The checkout simulation pays no interest.</p></noscript>
+      <div class="boot-help"><p>Enable JavaScript to choose a waiting period and try checkout. No money moves.</p>
+        <p>In the separate report model, S$100 held for seven days at an assumed 4% annual rate earns about S$0.0767 gross. The shopper’s modeled cancellation share is S$0.06. The checkout simulation pays no interest.</p></div>
     </div>
   </main>
   <div id="feedback" role="status" aria-live="polite" aria-atomic="true"></div>

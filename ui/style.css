@@ -1926,7 +1926,7 @@ dialog::backdrop {
 .r-cover .r-cover-link { background: #f8b49b; color: #263d35; border: 1px solid #f5c7b6; border-radius: 5px; padding: .65rem 1rem; text-decoration: none }
 .r-cover .r-cover-link:hover { background: #ffcfb9 }
 .r-cover .r-cover-link:focus-visible { outline-color: #fff9e7 }
-.boot noscript p { max-width: 64ch; margin-top: 1rem }
+.boot-help p { max-width: 64ch; margin-top: 1rem }
 
 .r-comparison {
   padding: clamp(17px, 2.5vw, 30px);

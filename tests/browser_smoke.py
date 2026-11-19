@@ -443,16 +443,28 @@ def reset_during_confirmation(page, base):
     merchant.locator('[data-action=reset]').click()
 
     # Queue the reset ahead of the already-reviewed decision using the real cross-tab lock.
-    merchant.evaluate("""key => {
-        navigator.locks.request(key, () => new Promise(resolve => { window.releaseQueue = resolve; }));
-    }""", KEY)
-    merchant.wait_for_function("typeof window.releaseQueue === 'function'")
-    pending_count = """async ([key, n]) =>
-        (await navigator.locks.query()).pending.filter(lock => lock.name === key).length === n"""
+    merchant.evaluate("""key => new Promise(acquired => {
+        navigator.locks.request(key, () => new Promise(resolve => {
+            window.releaseQueue = resolve;
+            acquired();
+        }));
+    })""", KEY)
+
+    def wait_for_pending(count):
+        # Poll from the test process; the page's CSP also applies under the fixed clock.
+        deadline = time.monotonic() + 4
+        while time.monotonic() < deadline:
+            pending = page.evaluate("""async key =>
+                (await navigator.locks.query()).pending.filter(lock => lock.name === key).length""", KEY)
+            if pending == count:
+                return
+            time.sleep(0.01)
+        raise AssertionError(f'Expected {count} queued demo locks, found {pending}')
+
     merchant.locator('[data-confirm]').click()
-    page.wait_for_function(pending_count, arg=[KEY, 1])
+    wait_for_pending(1)
     page.locator('[data-confirm]').click()
-    page.wait_for_function(pending_count, arg=[KEY, 2])
+    wait_for_pending(2)
     merchant.evaluate('() => window.releaseQueue()')
 
     expect(page.locator('#feedback')).to_contain_text('Review the current order')
@@ -515,6 +527,14 @@ def review_viewports(browser):
                 for offset in range(0, len(stamp), 3000):
                     print(f'VISUAL {width} {route} {offset} {stamp[offset:offset + 3000]}', flush=True)
             context.close()
+            fallback = browser.new_context(viewport={'width': width, 'height': height}, java_script_enabled=False)
+            plain = fallback.new_page()
+            plain.goto(url)
+            expect(plain.locator('.boot-help p').first).to_be_visible()
+            data = base64.b64encode(plain.screenshot(type='jpeg', quality=63)).decode()
+            for offset in range(0, len(data), 3000):
+                print(f'FALLBACK {width} {offset} {data[offset:offset + 3000]}', flush=True)
+            fallback.close()
 
 
 def main():
@@ -563,18 +583,20 @@ def main():
             loopback.case('Identical standalone HTML served alone on loopback', standalone_check)
             loopback.case('Standalone hold with browser storage unavailable', standalone_without_storage)
             loopback.case('Standalone explanation without JavaScript', no_script_explanation, javascript=False)
+            loopback.case('Standalone scenario shortcut and offline CSV', report_shortcut)
             report['standalone'] = {
                 'file': standalone_path.name, 'sha256': hashlib.sha256(standalone_path.read_bytes()).hexdigest(),
                 'unexpected_request_attempts': file_mode.attempts + loopback.attempts,
                 'direct_file': file_mode.cases[0], 'loopback': loopback.cases[0],
-                'without_storage': loopback.cases[1], 'without_javascript': loopback.cases[2]}
+                'without_storage': loopback.cases[1], 'without_javascript': loopback.cases[2],
+                'scenario_download': loopback.cases[3]}
         browser.close()
     OUTPUT.parent.mkdir(parents=True, exist_ok=True)
     OUTPUT.write_text(json.dumps(report, indent=2, ensure_ascii=False) + '\n', encoding='utf-8')
     print(f'{passed}/{len(run.cases)} passed. Receipt: {OUTPUT}')
     if args.standalone:
         standalone = report['standalone']
-        required = ('loopback', 'without_storage', 'without_javascript')
+        required = ('loopback', 'without_storage', 'without_javascript', 'scenario_download')
         if standalone['direct_file']['status'] == 'failed' or any(standalone[key]['status'] != 'passed' for key in required):
             return 1
     return 0 if passed == len(run.cases) else 1
@@ -627,6 +649,7 @@ def merchant_reconciliation(page, base):
 
 
 def no_script_explanation(page, base):
+    expect(page.locator('main .boot-help p').first).to_be_visible()
     expect(page.locator('main')).to_contain_text('Enable JavaScript to choose a waiting period')
     expect(page.locator('main')).to_contain_text('The checkout simulation pays no interest')
     expect(page.locator('main')).not_to_contain_text('Loading')
