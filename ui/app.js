@@ -1,4 +1,5 @@
 import { applyAction, demoLedger, getView, validateLedger } from '../core/ledger.mjs';
+import { reportPage, reportResults } from './report.mjs';
 import { icon } from './icons.js';
 
 const DAY = 86_400_000;
@@ -9,7 +10,9 @@ const rails = {
 };
 const accountNames = { card_demo: 'Demo card', wallet_demo: 'Demo wallet', hold_demo: 'Order hold', merchant_demo: 'Demo merchant' };
 const eventNames = { held: 'Hold funded', completed: 'Purchase completed', refunded: 'Principal returned' };
-const pageNames = { home: 'Reserve now. Decide later.', how: 'How it works', checkout: 'Demo checkout', customer: 'Customer view', merchant: 'Merchant view' };
+const reportChoice = { basket:100, days:7, apr:4 };
+let navigationEpoch = 0;
+const pageNames = { report:'The price of a pause', home: 'Reserve now. Decide later.', how: 'How it works', checkout: 'Demo checkout', customer: 'Customer view', merchant: 'Merchant view' };
 const main = document.querySelector('#main');
 const feedback = document.querySelector('#feedback');
 const dialog = document.querySelector('#confirm-dialog');
@@ -135,6 +138,7 @@ function homePage() {
     '<p>Hold the item you want, give yourself time to think, then choose whether to buy it.</p>' +
     '<div class="hero-buttons"><a class="btn orange" href="#checkout">Try demo checkout ' + icon('arrow', 18) + '</a>' +
     '<a class="text-link" href="#how">How it works ' + icon('down', 15) + '</a></div>' +
+    '<div class="hero-note"><a class="text-link" href="#report">Explore the illustrated report →</a></div>' +
     '<div class="hero-note">' + icon('lock', 14) + ' No sign-up. No real payments.</div></div>' +
     productFigure(true) + '</section>' +
     '<section class="how-section" id="how" tabindex="-1"><div class="frame"><div class="section-head"><h2>How it works</h2>' +
@@ -253,6 +257,7 @@ function render() {
     if (link.hash === '#' + page) link.setAttribute('aria-current', 'page');
     else link.removeAttribute('aria-current');
   }
+  if (page === 'report') { main.innerHTML = reportPage(reportChoice.basket, reportChoice.days, reportChoice.apr); return; }
   if (loadError) {
     main.innerHTML = '<div class="frame workspace"><section class="panel error-panel"><div class="kicker">Simulation</div><h1>Saved demo unavailable.</h1><p>The browser could not read the saved simulation. Reset the sample data to start again.</p>' + resetRow() + '</section></div>';
     return;
@@ -271,6 +276,9 @@ function closeMenu() {
   menuButton.setAttribute('aria-label', 'Open menu');
 }
 function onRouteChange(event) {
+  navigationEpoch++;
+  pending = null;
+  if (dialog.open) dialog.close();
   closeMenu();
   render();
   if (route().page === 'how' && !loadError) {
@@ -312,6 +320,7 @@ async function perform(action, id) {
       checkout = { rail: 'card', days: 2 };
       if (route().page === 'customer' && route().id) location.hash = '#customer';
       render();
+      main.focus({ preventScroll:true });
       announce('Sample orders and demo clock restored.');
     } else if (action === 'advance' || action === 'unlock') {
       await updateState(current => {
@@ -350,6 +359,15 @@ main.addEventListener('click', event => {
   else if (['advance','unlock'].includes(action)) perform(action, document.querySelector('#order-detail')?.dataset.order);
 });
 main.addEventListener('change', event => {
+  if (event.target.matches('select[data-report]')) {
+    const values = {basket:[25,100,250,1000], days:[1,7,14,30], apr:[0,2,4,8]};
+    const key = event.target.dataset.report, value = Number(event.target.value);
+    if (Object.hasOwn(values,key) && values[key].includes(value)) {
+      reportChoice[key] = value;
+      document.querySelector('#r-results').innerHTML = reportResults(reportChoice.basket, reportChoice.days, reportChoice.apr);
+    }
+    return;
+  }
   if (event.target.id === 'rail-filter') {
     railFilter = event.target.value;
     document.querySelector('#ledger-rows').innerHTML = ledgerRows(getView(state.ledger, state.now));
@@ -369,6 +387,7 @@ main.addEventListener('submit', async event => {
   event.preventDefault();
   if (busy) return;
   busy = true;
+  const submittedAt = navigationEpoch;
   const submit = event.target.querySelector('[type="submit"]');
   submit.disabled = true;
   try {
@@ -381,7 +400,8 @@ main.addEventListener('submit', async event => {
         source: rails[rail].source, at: current.now, holdMs: days * DAY
       })
     }));
-    location.hash = '#customer/' + orderId;
+    if (submittedAt === navigationEpoch && route().page === 'checkout') location.hash = '#customer/' + orderId;
+    else if (['merchant','customer'].includes(route().page)) render();
     announce('Demo item reserved. Your hold is open.');
   } catch (error) {
     submit.disabled = false;
@@ -389,14 +409,15 @@ main.addEventListener('submit', async event => {
   } finally { busy = false; }
 });
 dialog.addEventListener('click', event => {
-  if (event.target.closest('[data-dismiss]')) dialog.close();
+  if (event.target.closest('[data-dismiss]')) { pending = null; dialog.close(); return; }
   if (event.target.closest('[data-confirm]') && pending) {
     const {action, id} = pending;
+    pending = null;
     dialog.close();
     perform(action, id);
   }
 });
-dialog.addEventListener('close', () => { pending = null; });
+dialog.addEventListener('close', () => { if (!dialog.open) pending = null; });
 menuButton.addEventListener('click', () => {
   const open = menu.classList.toggle('open');
   menuButton.setAttribute('aria-expanded', String(open));

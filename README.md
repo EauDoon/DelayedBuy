@@ -1,4 +1,4 @@
-# delayedbuy v1.0
+# delayedbuy v1.1
 
 Reserve a fictional item. Give yourself time. Then decide whether to complete the purchase or cancel it.
 
@@ -12,6 +12,10 @@ Reserve a fictional item. Give yourself time. Then decide whether to complete th
 
 Alternatively, [download the single-file demo](https://github.com/EauDoon/DelayedBuy/raw/refs/heads/main/downloads/delayedbuy-demo.html). If the browser prevents opening local HTML, serve it over local HTTP as above.
 
+## The price of a pause
+
+Open **Report** from the top navigation or visit `/#report` on a local server. Pick a basket, invested time and annual rate to compare 64 checked scenarios. The charts distinguish gross interest, refundable principal, a cancellation reward and the modeled cost of prepayment. If deploying under a repository subpath, add `#report` to the repository’s Pages root URL instead.
+
 ## What's here
 
 - `index.html`, `ui/` and `core/`: the static app, original fictional lamp illustration, interfaces and ledger. No server, external telemetry or payment integrations.
@@ -21,7 +25,8 @@ Alternatively, [download the single-file demo](https://github.com/EauDoon/Delaye
 ## Verify and package
 
 ```sh
-node --test tests/ledger.test.mjs
+node --test tests/*.test.mjs
+python3 scripts/build_report_data.py
 python3 -m unittest discover -s economics -v
 python3 scripts/package_demo.py --standalone dist/delayedbuy-demo.html --pages dist/site
 python3 tests/browser_smoke.py --standalone dist/delayedbuy-demo.html
@@ -29,4 +34,8 @@ python3 tests/browser_smoke.py --standalone dist/delayedbuy-demo.html
 
 The browser suite needs Python Playwright plus Chromium. The app and other checks require no package installation beyond standard Node and Python runtimes. Site packaging expects a new or empty destination. Refreshing or clearing this browser’s storage affects only its demo state. Browser storage is not an authentication boundary or a settlement system.
 
-For v1.0, 9 ledger and 11 economics checks passed on release verification. The original browser suite passed 12 site journeys and the standalone HTTP journey; direct-file playback was not verified in that run. The released standalone file rebuilt byte-for-byte from the app source (SHA-256 `dbe5304f8fde158b553eba8b8e8b99734fae40a9400ea96d23e857f633d6faf8`).
+The offline report rows are regenerated from `economics/sensitivity.csv` and tested against all 64 original rows. Browser tests cover the report and the checkout, including Back navigation during a confirmation, keyboard focus restoration and a queued checkout that must not override later navigation.
+
+**Static hosting:** the prebuilt `docs/` directory contains only the standalone simulator and `.nojekyll`. To enable GitHub Pages, select **Settings → Pages → Deploy from a branch → main → /docs**. Publication of the source does not itself enable hosting.
+
+[Read the v1.0 baseline](https://github.com/EauDoon/DelayedBuy/tree/818fedf9ec625a8cb9513f318a713c38789df7e7).

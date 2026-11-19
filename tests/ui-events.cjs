@@ -1,0 +1,16 @@
+// Verify the shipped single-file JavaScript against a DOM/lock event test double.
+const fs=require('node:fs'), vm=require('node:vm'), assert=require('node:assert/strict'), crypto=require('node:crypto');
+const html=fs.readFileSync(process.argv[2],'utf8'), script=html.match(/<script>([\s\S]*?)<\/script>/)[1];
+const nodes=new Map(), winHandlers={}, storage=new Map(); let focused,holdLock=false,release;
+function node(sel){if(!nodes.has(sel)){const o={id:sel.slice(1),dataset:{},open:false,hash:'',innerHTML:'',handlers:{},disabled:false,classList:{remove(){},contains(){return false}},addEventListener(k,f){this.handlers[k]=f},querySelectorAll(){return []},querySelector(k){return node(k)},setAttribute(){},removeAttribute(){},focus(){focused=this},scrollIntoView(){},append(){},replaceChildren(){},showModal(){this.open=true},close(){this.open=false;this.handlers.close?.()}};nodes.set(sel,o)}return nodes.get(sel)}
+const st={setItem(k,v){storage.set(k,v)},getItem(k){return storage.get(k)??null},removeItem(k){storage.delete(k)}};
+const w={localStorage:st,sessionStorage:st,addEventListener(k,f){winHandlers[k]=f},matchMedia(){return {matches:false}},scrollTo(){}};
+const loc={hash:'#report'}; const context={window:w,document:{querySelector:node,createElement:node,addEventListener(){}},location:loc,navigator:{locks:{async request(k,f){if(holdLock)await new Promise(r=>release=r);return f()}}},crypto:crypto.webcrypto,setTimeout:()=>1,clearTimeout(){},URL,Intl,console};vm.runInNewContext(script,context);
+const wait=()=>new Promise(r=>setImmediate(r));const main=node('#main'),dlg=node('#confirm-dialog');const route=h=>{const old=loc.hash;loc.hash=h;winHandlers.hashchange({oldURL:'http://test.invalid/'+old})};const click=(name)=>main.handlers.click({target:{closest(q){return q==='[data-action]'?{dataset:{action:name}}:null}}});const confirm=()=>dlg.handlers.click({target:{closest(q){return q==='[data-confirm]'}}});
+const kept=()=>JSON.parse(storage.get('delayedbuy.sandbox.v1')).ledger.actions;
+(async()=>{await wait();
+assert.match(main.innerHTML,/The price/);main.handlers.change({target:{matches:q=>q==='select[data-report]',dataset:{report:'apr'},value:'0'}});assert.match(node('#r-results').innerHTML,/S\$0\.0000/);console.log('passed report route and live control');
+route('#customer/ord_arc');node('#order-detail').dataset.order='ord_arc'; const count=kept().length;click('cancel');assert(dlg.open);route('#merchant');assert(!dlg.open);confirm();await wait();assert.equal(kept().length,count);console.log('passed stale dialog invalidation');
+click('reset');assert(dlg.open);confirm();await wait();assert.equal(focused,main);assert.match(main.innerHTML,/Merchant ledger/);console.log('passed reset focus');
+route('#checkout');holdLock=true; const payment=main.handlers.submit({target:{id:'checkout-form',querySelector:()=>node('submit')},preventDefault(){}});route('#merchant');holdLock=false;release();await payment;assert.equal(kept().length,count+1);assert.equal(loc.hash,'#merchant');assert.match(main.innerHTML,/S\$360\.00/);console.log('passed queued save, preserved newer route and reconciled merchant view');
+})().catch(e=>{console.error(e);process.exitCode=1})
