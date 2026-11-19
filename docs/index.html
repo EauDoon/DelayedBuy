@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-NU4kALvdpFgd+dYn/XA+VdTzWzqMlxGvVIuGcUjFPS8='; style-src 'unsafe-inline'; img-src data:; font-src data:; connect-src 'none'; form-action 'none'; base-uri 'none'; object-src 'none'">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-JwLrf3p6c0hcoUAoPK0dhgpGpURwXZp91e1vK/yMjH8='; style-src 'unsafe-inline'; img-src data:; font-src data:; connect-src 'none'; form-action 'none'; base-uri 'none'; object-src 'none'">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#faf8f2">
   <meta name="description" content="Try delayedbuy, a simulated checkout that reserves an item and gives you time to decide.">
@@ -2043,16 +2043,16 @@ function getView(ledger, nowMs = Date.now()) {
   return { orders, totals };
 }
 
-function demoLedger(nowMs = Date.now()) {
+function demoLedger(nowMs = Date.now(), requestIdFor = label => 'req_' + label) {
   checkClock(nowMs);
   requireThat(nowMs >= 4 * DAY && nowMs <= LAST_DATE - 2 * DAY, 'Demo time is out of range.');
   const actions = [
-    { type: 'hold', requestId: 'req_daypack_hold', orderId: 'ord_daypack', item: 'Canvas daypack',
+    { type: 'hold', requestId: requestIdFor('daypack_hold'), orderId: 'ord_daypack', item: 'Canvas daypack',
       rail: 'card', amount: 8_500, source: 'card_demo', at: nowMs - 4 * DAY, holdMs: 2 * DAY },
-    { type: 'hold', requestId: 'req_studio_hold', orderId: 'ord_studio', item: 'Studio headphones',
+    { type: 'hold', requestId: requestIdFor('studio_hold'), orderId: 'ord_studio', item: 'Studio headphones',
       rail: 'usdc', amount: 120_000_000, source: 'wallet_demo', at: nowMs - 3 * DAY, holdMs: 2 * DAY },
-    { type: 'complete', requestId: 'req_daypack_complete', orderId: 'ord_daypack', at: nowMs - DAY },
-    { type: 'hold', requestId: 'req_arc_hold', orderId: 'ord_arc', item: 'Arc table lamp',
+    { type: 'complete', requestId: requestIdFor('daypack_complete'), orderId: 'ord_daypack', at: nowMs - DAY },
+    { type: 'hold', requestId: requestIdFor('arc_hold'), orderId: 'ord_arc', item: 'Arc table lamp',
       rail: 'card', amount: 18_000, source: 'card_demo', at: nowMs - DAY, holdMs: 3 * DAY },
   ];
   return validateLedger({ version: 1, actions });
@@ -2188,7 +2188,8 @@ function money(rail, units) {
 }
 function initialState() {
   const now = Date.now();
-  return { version: 1, now, ledger: demoLedger(now) };
+  // Sample order URLs survive a reset, but each new opening gets its own receipt.
+  return { version: 1, now, ledger: demoLedger(now, () => uniqueId('req_')) };
 }
 function findStorage() {
   // Without a cross-tab lock, keep each tab's simulation independent.
@@ -2443,12 +2444,12 @@ function ask(action) {
     ? ['Reset this demo?', 'This replaces the saved orders and simulation clock with the original examples.', 'Reset demo']
     : isCancel ? ['Cancel this hold?', 'Return ' + amount + ' for ' + order.item + ' to the original ' + rails[order.rail].label.toLowerCase() + '.', 'Confirm cancellation']
     : ['Complete this purchase?', 'Release ' + amount + ' for ' + order.item + ' to the demo merchant and close this hold.', 'Confirm purchase'];
-  pending = { action, id };
+  pending = { action, id, opening: order?.events[0] };
   dialog.innerHTML = '<div class="dialog-box"><div class="kicker">Simulation</div><h2 id="dialog-title">' + config[0] + '</h2><p>' + escapeHtml(config[1]) +
     '</p><div class="action-row"><button type="button" class="btn outline" data-dismiss autofocus>Go back</button><button type="button" class="btn orange" data-confirm>' + config[2] + '</button></div></div>';
   dialog.showModal();
 }
-async function perform(action, id) {
+async function perform(action, id, opening) {
   if (busy) return;
   busy = true;
   try {
@@ -2476,7 +2477,15 @@ async function perform(action, id) {
       document.querySelector(action === 'advance' ? '[data-action="advance"]' : '[data-action="complete"]')?.focus({ preventScroll: true });
     } else {
       const requestId = uniqueId('req_');
-      await updateState(current => ({ ...current, ledger: applyAction(current.ledger, { type: action, requestId, orderId: id, at: current.now }) }));
+      await updateState(current => {
+        const hold = current.ledger.actions.find(entry => entry.type === 'hold' && entry.orderId === id);
+        if (!hold || hold.requestId !== opening.requestId || hold.at !== opening.at) {
+          state = current;
+          render();
+          throw new Error('This hold changed. Review the current order before confirming again.');
+        }
+        return { ...current, ledger: applyAction(current.ledger, { type: action, requestId, orderId: id, at: current.now }) };
+      });
       render();
       announce(action === 'cancel' ? 'Hold canceled. Principal returned to its original source.' : 'Purchase completed. Principal paid to the demo merchant.');
       const detail = document.querySelector('#order-detail');
@@ -2550,10 +2559,10 @@ main.addEventListener('submit', async event => {
 dialog.addEventListener('click', event => {
   if (event.target.closest('[data-dismiss]')) { pending = null; dialog.close(); return; }
   if (event.target.closest('[data-confirm]') && pending) {
-    const {action, id} = pending;
+    const {action, id, opening} = pending;
     pending = null;
     dialog.close();
-    perform(action, id);
+    perform(action, id, opening);
   }
 });
 dialog.addEventListener('close', () => { if (!dialog.open) pending = null; });
