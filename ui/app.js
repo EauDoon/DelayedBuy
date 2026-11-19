@@ -12,7 +12,7 @@ const accountNames = { card_demo: 'Demo card', wallet_demo: 'Demo wallet', hold_
 const eventNames = { held: 'Hold funded', completed: 'Purchase completed', refunded: 'Principal returned' };
 const reportChoice = { basket:100, days:7, apr:4 };
 let navigationEpoch = 0;
-const pageNames = { report:'The price of a pause', home: 'Reserve now. Decide later.', how: 'How it works', checkout: 'Demo checkout', customer: 'Customer view', merchant: 'Merchant view' };
+const pageNames = { report:'The price of a pause', home: 'Hold the price. Decide later.', how: 'How it works', checkout: 'Start a demo hold', customer: 'Customer view', merchant: 'Merchant view' };
 const main = document.querySelector('#main');
 const feedback = document.querySelector('#feedback');
 const dialog = document.querySelector('#confirm-dialog');
@@ -133,8 +133,8 @@ function homePage() {
   const options = waitingPeriods.map(days => '<option value="' + days + '"' + (checkout.days === days ? ' selected' : '') + '>' +
     days + (days === 1 ? ' day' : ' days') + '</option>').join('');
   return '<section class="frame hero"><div class="hero-copy"><div class="eyebrow kicker">Checkout simulation</div>' +
-    '<h1>Hold the lamp.<br><em>Decide later.</em></h1>' +
-    '<p>Reserve the Arc table lamp. Cancel for a full refund while it’s on hold, or buy it when your wait ends.</p>' +
+    '<h1>Hold the price.<br><em>Decide later.</em></h1>' +
+    '<p>Fix your demo price for the Arc table lamp. This demo reserves no stock. Buy after the wait or cancel for a full refund any time before buying.</p>' +
     '<div class="hero-setup"><label for="preview-days">Waiting period</label><div class="hero-buttons">' +
     '<select id="preview-days">' + options + '</select><a class="btn orange" href="#checkout">Set up my hold ' + icon('arrow', 18) +
     '</a></div></div><div class="hero-note">' + icon('lock', 14) + ' Demo funds only. No sign-up.</div></div>' +
@@ -154,21 +154,25 @@ function checkoutTerms() {
 }
 function checkoutPage() {
   const selected = checkout.rail;
+  const unlockAt = state.now + checkout.days * DAY;
   const option = (rail, symbol, title) => '<label class="choice"><input type="radio" name="rail" value="' + rail + '"' + (rail === selected ? ' checked' : '') +
     '><span>' + icon(symbol, 17) + title + '<i class="pick"></i></span></label>';
   const days = waitingPeriods.map(n => '<label class="choice"><input type="radio" name="days" value="' + n + '"' +
     (n === checkout.days ? ' checked' : '') + '><span>' + (n === 1 ? '1 day' : n + ' days') + '</span></label>').join('');
-  return '<div class="frame workspace">' + backLink() + '<div class="kicker">Simulation / Checkout</div><h1>Reserve your item.</h1>' +
+  return '<div class="frame workspace">' + backLink() + '<div class="kicker">Simulation / Checkout</div><h1>Start a demo hold.</h1>' +
     '<p class="intro">Choose how to fund the demo hold and when the option to buy opens.</p>' +
     '<div class="checkout-grid" id="checkout-grid">' + productFigure(false, selected) +
     '<form class="checkout-form" id="checkout-form"><fieldset aria-describedby="rail-help"><legend>Payment method</legend><div class="choices">' +
     option('card', 'card', 'SGD card') + option('usdc', 'coin', 'USDC wallet') + '</div>' +
     '<p class="help" id="rail-help">' + checkoutTerms() + '</p></fieldset>' +
-    '<fieldset><legend>Waiting period</legend><div class="choices durations">' + days + '</div><p class="help">You can cancel throughout the hold. Buying requires your confirmation after the wait.</p></fieldset>' +
-    '<div class="summary-lines"><div class="summary-line"><span>Earliest completion</span><strong id="checkout-unlock">' + showDate(state.now + checkout.days * DAY) + ' SGT</strong></div>' +
-    '<div class="summary-line"><span>Interest on this hold</span><strong>None</strong></div><div class="summary-line total"><span>Amount held</span><strong id="checkout-total">' + money(selected, rails[selected].amount) + '</strong></div></div>' +
-    '<button type="submit" class="btn orange full">Create demo hold ' + icon('arrow', 17) + '</button>' +
-    '<p class="payment-note">' + icon('lock', 14) + ' Card and wallet use separate demo prices.</p></form></div></div>';
+    '<fieldset><legend>Waiting period</legend><div class="choices durations">' + days + '</div></fieldset>' +
+    '<div class="summary-lines" id="checkout-terms">' +
+    '<div class="summary-line"><div><b>Is one set aside for me?</b><p>This demo reserves no stock.</p></div></div>' +
+    '<div class="summary-line"><div><b>Can my price change?</b><p>Your demo price stays <strong id="checkout-total">' + money(selected, rails[selected].amount) + '</strong> until you buy or cancel.</p></div></div>' +
+    '<div class="summary-line"><div><b>When does the hold expire?</b><p>No automatic expiry. You can buy from <time id="checkout-unlock" datetime="' + new Date(unlockAt).toISOString() + '">' + showDate(unlockAt) + ' SGT</time> or cancel any time before buying.</p></div></div>' +
+    '<div class="summary-line"><div><b>When do I commit?</b><p>Creating the hold sets aside demo funds. After the wait, choose <strong>Complete purchase</strong>, then <strong>Confirm purchase</strong> to buy.</p></div></div></div>' +
+    '<button type="submit" class="btn orange full" aria-describedby="checkout-terms">Create demo hold ' + icon('arrow', 17) + '</button>' +
+    '<p class="payment-note">' + icon('lock', 14) + ' Card and wallet use separate demo prices. This hold earns no interest.</p></form></div></div>';
 }
 function clockPanel() {
   return '<section class="clock-panel" aria-label="Simulation clock"><div class="clock-label">' + icon('clock', 20) +
@@ -201,8 +205,10 @@ function orderDetails(order, missing) {
   if (isOpen) {
     const unlock = order.eligible ? '' : '<button data-action="unlock" class="plain-button">Skip the remaining demo wait</button>';
     const daysLeft = Math.max(0, Math.ceil((order.unlockAt - state.now) / DAY));
-    const help = order.eligible ? 'Your waiting period has ended. Choose what happens to this hold.' : daysLeft + (daysLeft === 1 ? ' day' : ' days') + ' left on the demo clock. You can cancel now.';
-    actions = '<p class="action-help">' + help + '</p>' + unlock + '<div class="action-row"><button class="btn orange" data-action="complete"' +
+    const help = order.eligible ? 'Your waiting period has ended.' : daysLeft + (daysLeft === 1 ? ' day' : ' days') + ' left on the demo clock.';
+    actions = '<p class="action-help">This demo reserves no stock. Your demo price stays fixed until you buy or cancel. No automatic expiry.</p>' +
+      '<p class="action-help">' + help + ' After the wait, choose <strong>Complete purchase</strong>, then <strong>Confirm purchase</strong> to buy. You can cancel any time before buying.</p>' +
+      unlock + '<div class="action-row"><button class="btn orange" data-action="complete"' +
       (order.eligible ? '' : ' disabled') + '>Complete purchase ' + icon('check', 16) + '</button><button class="btn outline" data-action="cancel">Cancel hold ' + icon('refund', 15) + '</button></div>';
   } else {
     actions = '<p class="action-help">' + (order.status === 'completed' ? 'The demo merchant received the principal for this purchase.' :
@@ -210,10 +216,10 @@ function orderDetails(order, missing) {
   }
   return '<section class="panel detail-panel" id="order-detail" data-order="' + escapeHtml(order.id) + '" aria-label="Selected order">' +
     statusBadge(order) + '<h2 class="detail-title">' + escapeHtml(order.item) + '</h2><p class="detail-sub">Order ' + escapeHtml(order.id) + '</p>' +
-    '<dl class="details-grid"><div><dt>Principal</dt><dd class="money">' + money(order.rail, order.amount) +
+    '<dl class="details-grid"><div><dt>Fixed demo price</dt><dd class="money">' + money(order.rail, order.amount) +
     '</dd></div><div><dt>Original source</dt><dd>' + rails[order.rail].label +
     '</dd></div><div><dt>Hold opened · SGT</dt><dd>' + showDate(order.createdAt) +
-    '</dd></div><div><dt>Earliest completion · SGT</dt><dd>' + showDate(order.unlockAt) + '</dd></div></dl>' +
+    '</dd></div><div><dt>Earliest purchase · SGT</dt><dd><time datetime="' + new Date(order.unlockAt).toISOString() + '">' + showDate(order.unlockAt) + '</time></dd></div></dl>' +
     actions + '<div class="timeline"><h3>Order history</h3><ol>' +
     order.events.map(event => '<li><span>' + eventNames[event.type] + '</span><time datetime="' + new Date(event.at).toISOString() + '">' + showDate(event.at) + ' SGT</time></li>').join('') +
     '</ol></div></section>';
@@ -403,7 +409,10 @@ main.addEventListener('change', event => {
   const amount = money(checkout.rail, rails[checkout.rail].amount);
   document.querySelector('#checkout-total').textContent = amount;
   document.querySelector('.product-caption small').textContent = amount;
-  document.querySelector('#checkout-unlock').textContent = showDate(state.now + checkout.days * DAY) + ' SGT';
+  const unlockAt = state.now + checkout.days * DAY;
+  const unlock = document.querySelector('#checkout-unlock');
+  unlock.dateTime = new Date(unlockAt).toISOString();
+  unlock.textContent = showDate(unlockAt) + ' SGT';
 });
 main.addEventListener('submit', async event => {
   if (event.target.id !== 'checkout-form') return;
@@ -417,15 +426,26 @@ main.addEventListener('submit', async event => {
     const orderId = uniqueId('ord_');
     const requestId = uniqueId('req_');
     const { rail, days } = checkout;
-    await updateState(current => ({
-      ...current, ledger: applyAction(current.ledger, {
-        type: 'hold', requestId, orderId, item: 'Arc table lamp', rail, amount: rails[rail].amount,
-        source: rails[rail].source, at: current.now, holdMs: days * DAY
-      })
-    }));
+    const reviewedAt = state.now;
+    await updateState(current => {
+      if (current.now !== reviewedAt) {
+        state = current;
+        render();
+        if (submittedAt === navigationEpoch && route().page === 'checkout') {
+          document.querySelector('#checkout-form [type="submit"]').focus();
+        }
+        throw new Error('The demo clock changed. Review the new purchase time before creating your hold.');
+      }
+      return {
+        ...current, ledger: applyAction(current.ledger, {
+          type: 'hold', requestId, orderId, item: 'Arc table lamp', rail, amount: rails[rail].amount,
+          source: rails[rail].source, at: current.now, holdMs: days * DAY
+        })
+      };
+    });
     if (submittedAt === navigationEpoch && route().page === 'checkout') location.hash = '#customer/' + orderId;
     else if (['merchant','customer'].includes(route().page)) render();
-    announce('Demo item reserved. Your hold is open.');
+    announce('Demo hold created. Your price is fixed and your demo funds are held.');
   } catch (error) {
     submit.disabled = false;
     showError(error);
@@ -459,7 +479,6 @@ document.querySelector('.skip').addEventListener('click', event => {
   main.scrollIntoView({ block: 'start' });
 });
 document.addEventListener('keydown', event => { if (event.key === 'Escape' && menu.classList.contains('open')) { closeMenu(); menuButton.focus(); } });
-window.addEventListener('hashchange', onRouteChange);
 window.addEventListener('storage', event => {
   if (!shared || (event.key !== STORE_KEY && event.key !== null)) return;
   try { state = readState() ?? initialState(); loadError = false; }
@@ -471,6 +490,8 @@ async function boot() {
   findStorage();
   try { await locked(() => { const current = readState(); if (current) state = current; else saveState(initialState()); }); }
   catch { loadError = true; }
+  // Navigation during the initial storage lock is picked up by this first render.
+  window.addEventListener('hashchange', onRouteChange);
   render();
   if (route().page === 'how') document.querySelector('#how')?.scrollIntoView();
   if (route().page === 'customer' && route().id) focusOrder();

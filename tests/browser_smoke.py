@@ -18,6 +18,7 @@ from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from importlib.metadata import version
 from pathlib import Path
 from urllib.parse import unquote, urlsplit
+from zoneinfo import ZoneInfo
 
 from playwright.sync_api import expect, sync_playwright
 
@@ -143,6 +144,49 @@ class Run:
 
 KEY = 'delayedbuy.sandbox.v1'
 ROUTES = ['report', 'home', 'how', 'checkout', 'customer', 'merchant']
+DAY_MS = 86_400_000
+
+
+def sgt(timestamp):
+    return datetime.fromtimestamp(timestamp / 1000, ZoneInfo('Asia/Singapore')).strftime('%d-%m-%Y · %H:%M SGT')
+
+
+def iso_time(timestamp):
+    return datetime.fromtimestamp(timestamp / 1000, timezone.utc).isoformat(timespec='milliseconds').replace('+00:00', 'Z')
+
+
+def checkout_answers(page, price, unlock):
+    terms = page.locator('#checkout-form #checkout-terms')
+    expected = [
+        ('Is one set aside for me?', 'This demo reserves no stock.'),
+        ('Can my price change?', f'Your demo price stays {price} until you buy or cancel.'),
+        ('When does the hold expire?', f'No automatic expiry. You can buy from {sgt(unlock)} or cancel any time before buying.'),
+        ('When do I commit?', 'Creating the hold sets aside demo funds. After the wait, choose Complete purchase, then Confirm purchase to buy.'),
+    ]
+    submit = page.get_by_role('button', name='Create demo hold')
+    terms.evaluate('el => el.scrollIntoView({block: "center", behavior: "instant"})')
+    for question, answer in expected:
+        row = terms.locator('.summary-line').filter(has=page.get_by_text(question, exact=True))
+        expect(row).to_have_text(question + ' ' + answer, use_inner_text=True)
+        expect(row).to_be_visible()
+        expect(row).to_be_in_viewport(ratio=1)
+    assert terms.evaluate('(el) => el.nextElementSibling === el.closest("form").querySelector("[type=submit]")')
+    expect(submit).to_have_accessible_description(re.compile('This demo reserves no stock'))
+    expect(terms.locator('time')).to_have_attribute('datetime', iso_time(unlock))
+
+
+def saved_terms(page, opened, price):
+    detail = page.locator('#order-detail')
+    expect(detail.get_by_role('heading', name=opened['item'], exact=True)).to_be_visible()
+    expect(detail.locator('dd.money')).to_have_text(price)
+    expect(detail.get_by_text('Earliest purchase · SGT', exact=True)).to_be_visible()
+    unlock = opened['at'] + opened['holdMs']
+    purchase_time = detail.locator('dl time')
+    expect(purchase_time).to_have_text(sgt(unlock).removesuffix(' SGT'))
+    expect(purchase_time).to_have_attribute('datetime', iso_time(unlock))
+    for term in ('reserves no stock', 'price stays fixed until you buy or cancel', 'No automatic expiry',
+                 'choose Complete purchase, then Confirm purchase to buy', 'cancel any time before buying'):
+        expect(detail).to_contain_text(term)
 
 
 def visit(page, base, route):
@@ -176,7 +220,8 @@ def act(page, choice):
     page.locator(f'[data-action={choice}]').click()
     dialog = page.locator('#confirm-dialog')
     expect(dialog).to_be_visible()
-    dialog.locator('[data-confirm]').click()
+    confirmation = 'Confirm cancellation' if choice == 'cancel' else 'Confirm purchase'
+    dialog.get_by_role('button', name=confirmation, exact=True).click()
     expect(dialog).not_to_be_visible()
     expect(page.locator('#order-detail .status')).to_have_text('Refunded' if choice == 'cancel' else 'Completed')
 
@@ -235,6 +280,8 @@ def viewport_check(page, base, screenshots=None):
         if route == 'checkout':
             forbidden = page.locator('input:not([type=radio]):not([type=checkbox]):not([type=hidden]), textarea, iframe, [contenteditable=true]')
             expect(forbidden).to_have_count(0)
+            if page.viewport_size['width'] == 320:
+                checkout_answers(page, 'S$180.00', stored(page)['now'] + 2 * DAY_MS)
         if route == 'home':
             expect(page.locator('.product-shot').first).to_be_visible()
             page.wait_for_function('document.querySelector(".product-shot").naturalWidth > 0')
@@ -333,15 +380,32 @@ def keyboard_flow(page, base):
     page.keyboard.press('Enter')
     expect(page.locator('#main')).to_be_focused()
     expect(page.locator('#checkout-form')).to_be_visible()
-    submit = page.locator('#checkout-form button[type=submit]')
+    now = stored(page)['now']
+    checkout_answers(page, 'S$180.00', now + 2 * DAY_MS)
+    card = page.get_by_role('radio', name='SGD card')
     for _ in range(25):
         page.keyboard.press('Tab')
-        if submit.evaluate('(el) => document.activeElement === el'):
+        if card.evaluate('(el) => document.activeElement === el'):
             break
+    expect(card).to_be_focused()
+    page.keyboard.press('ArrowRight')
+    expect(page.get_by_role('radio', name='USDC wallet')).to_be_checked()
+    checkout_answers(page, '135.00 USDC', now + 2 * DAY_MS)
+    page.keyboard.press('Tab')
+    expect(page.get_by_role('radio', name='2 days')).to_be_focused()
+    page.keyboard.press('ArrowRight')
+    expect(page.get_by_role('radio', name='7 days')).to_be_checked()
+    checkout_answers(page, '135.00 USDC', now + 7 * DAY_MS)
+    page.keyboard.press('Tab')
+    submit = page.get_by_role('button', name='Create demo hold')
     expect(submit).to_be_focused()
     page.keyboard.press('Enter')
     cancel = page.locator('[data-action=cancel]')
     expect(cancel).to_be_visible()
+    opened = actions(stored(page))[-1]
+    assert (opened['item'], opened['rail'], opened['amount']) == ('Arc table lamp', 'usdc', 135_000_000)
+    assert (opened['at'], opened['holdMs']) == (now, 7 * DAY_MS)
+    saved_terms(page, opened, '135.00 USDC')
     cancel.focus()
     page.keyboard.press('Enter')
     dialog = page.locator('#confirm-dialog')
@@ -352,7 +416,63 @@ def keyboard_flow(page, base):
     expect(dialog).not_to_be_visible()
     assert actions(stored(page)) == before, 'Escape confirmed a payment decision'
     expect(cancel).to_be_focused()
-    return {'first_tab': 'Skip to content', 'submit': 'Enter', 'dismiss_dialog': 'Escape', 'focus_restored': True}
+    return {'first_tab': 'Skip to content', 'submit': 'Enter', 'dismiss_dialog': 'Escape', 'focus_restored': True,
+            'four_answers_before_submit': True, 'saved_price': '135.00 USDC', 'buy_from_sgt': sgt(now + 7 * DAY_MS)}
+
+
+def saved_v11_decisions(page, base):
+    # Original v1.1 demoLedger seed (10f2354), including its stable request IDs and storage envelope.
+    now = 1_700_000_000_000
+    history = [
+        dict(type='hold', requestId='req_daypack_hold', orderId='ord_daypack', item='Canvas daypack',
+             rail='card', source='card_demo', amount=8_500, at=now - 4 * DAY_MS, holdMs=2 * DAY_MS),
+        dict(type='hold', requestId='req_studio_hold', orderId='ord_studio', item='Studio headphones',
+             rail='usdc', source='wallet_demo', amount=120_000_000, at=now - 3 * DAY_MS, holdMs=2 * DAY_MS),
+        dict(type='complete', requestId='req_daypack_complete', orderId='ord_daypack', at=now - DAY_MS),
+        dict(type='hold', requestId='req_arc_hold', orderId='ord_arc', item='Arc table lamp',
+             rail='card', source='card_demo', amount=18_000, at=now - DAY_MS, holdMs=3 * DAY_MS),
+    ]
+    # Restore a saved browser clock one millisecond before the card hold unlocks.
+    unlock = history[3]['at'] + history[3]['holdMs']
+    snapshot = dict(version=1, now=unlock - 1, ledger=dict(version=1, actions=history))
+    page.evaluate('([k, v]) => localStorage.setItem(k, JSON.stringify(v))', [KEY, snapshot])
+    page.reload(wait_until='load')
+    visit(page, base, 'customer/ord_arc')
+    expect(page.locator('[data-action=complete]')).to_be_disabled()
+    expect(page.locator('[data-action=cancel]')).to_be_enabled()
+    assert stored(page) == snapshot
+    clock_unlock(page)
+    assert stored(page)['now'] == unlock
+    assert actions(stored(page)) == history
+    page.locator('[data-action=advance]').click()
+    expect(page.locator('.clock-label')).to_contain_text(sgt(unlock + DAY_MS))
+    page.reload(wait_until='load')
+    assert actions(stored(page)) == history, 'Clock advance or reload moved principal'
+    for opened, price in [(history[3], 'S$180.00'), (history[1], '120.00 USDC')]:
+        visit(page, base, 'customer/' + opened['orderId'])
+        detail = page.locator('#order-detail')
+        expect(detail.locator('.status')).to_have_text('Ready to decide')
+        saved_terms(page, opened, price)
+        purchase = detail.get_by_role('button', name='Complete purchase')
+        purchase.focus()
+        before = actions(stored(page))
+        page.keyboard.press('Enter')
+        dialog = page.get_by_role('dialog', name='Complete this purchase?')
+        expect(dialog).to_have_accessible_description(re.compile(re.escape(price) + '.*' + re.escape(opened['item'])))
+        expect(dialog.get_by_role('button', name='Go back')).to_be_focused()
+        assert actions(stored(page)) == before
+        page.keyboard.press('Enter')
+        expect(dialog).not_to_be_visible()
+        expect(purchase).to_be_focused()
+        expect(detail.get_by_role('button', name='Cancel hold')).to_be_enabled()
+        assert actions(stored(page)) == before
+        act(page, 'cancel')
+        final = actions(stored(page))
+        assert final[:-1] == before
+        assert (final[-1]['type'], final[-1]['orderId']) == ('cancel', opened['orderId'])
+    return {'v1_1_openings': [history[3]['requestId'], history[1]['requestId']],
+            'one_ms_before': 'waiting', 'at_unlock': 'open', 'after_advance_and_reload': 'open',
+            'purchase_dialog_dismissed_without_movement': True, 'canceled_after_unlock': ['card', 'usdc']}
 
 
 def corrupted_store(page, base):
@@ -431,6 +551,55 @@ def queued_checkout_navigation(page, base):
     return {'exactly_one_new_hold': True, 'newer_route_preserved': True}
 
 
+def hold_queue(page):
+    page.evaluate("""key => new Promise(acquired => {
+        navigator.locks.request(key, () => new Promise(resolve => {
+            window.releaseQueue = resolve;
+            acquired();
+        }));
+    })""", KEY)
+
+
+def wait_for_pending(page, count):
+    # Poll from the test process; the page's CSP also applies under the fixed clock.
+    deadline = time.monotonic() + 4
+    while time.monotonic() < deadline:
+        pending = page.evaluate("""async key =>
+            (await navigator.locks.query()).pending.filter(lock => lock.name === key).length""", KEY)
+        if pending == count:
+            return
+        time.sleep(0.01)
+    raise AssertionError(f'Expected {count} queued demo locks, found {pending}')
+
+
+def clock_change_during_checkout(page, base):
+    visit(page, base, 'checkout')
+    option(page, 'days', '1')
+    before = stored(page)
+    unlock = before['now'] + DAY_MS
+    checkout_answers(page, 'S$180.00', unlock)
+    merchant = page.context.new_page()
+    visit(merchant, base, 'merchant')
+    hold_queue(merchant)
+    merchant.locator('[data-action=advance]').click()
+    wait_for_pending(page, 1)
+    submit = page.get_by_role('button', name='Create demo hold')
+    submit.click()
+    wait_for_pending(page, 2)
+    merchant.evaluate('() => window.releaseQueue()')
+    expect(page.locator('#feedback')).to_contain_text('Review the new purchase time')
+    checkout_answers(page, 'S$180.00', unlock + DAY_MS)
+    assert actions(stored(page)) == actions(before)
+    submit.click()
+    expect(page.locator('#order-detail .status')).to_have_text('Waiting')
+    final = actions(stored(page))
+    assert final[:-1] == actions(before)
+    opened = final[-1]
+    assert (opened['type'], opened['at'], opened['holdMs']) == ('hold', before['now'] + DAY_MS, DAY_MS)
+    saved_terms(page, opened, 'S$180.00')
+    return {'earlier_preview_funded': False, 'new_preview_funded_once': True}
+
+
 def reset_during_confirmation(page, base):
     visit(page, base, 'customer/ord_arc')
     before = stored(page)
@@ -443,28 +612,12 @@ def reset_during_confirmation(page, base):
     merchant.locator('[data-action=reset]').click()
 
     # Queue the reset ahead of the already-reviewed decision using the real cross-tab lock.
-    merchant.evaluate("""key => new Promise(acquired => {
-        navigator.locks.request(key, () => new Promise(resolve => {
-            window.releaseQueue = resolve;
-            acquired();
-        }));
-    })""", KEY)
-
-    def wait_for_pending(count):
-        # Poll from the test process; the page's CSP also applies under the fixed clock.
-        deadline = time.monotonic() + 4
-        while time.monotonic() < deadline:
-            pending = page.evaluate("""async key =>
-                (await navigator.locks.query()).pending.filter(lock => lock.name === key).length""", KEY)
-            if pending == count:
-                return
-            time.sleep(0.01)
-        raise AssertionError(f'Expected {count} queued demo locks, found {pending}')
+    hold_queue(merchant)
 
     merchant.locator('[data-confirm]').click()
-    wait_for_pending(1)
+    wait_for_pending(page, 1)
     page.locator('[data-confirm]').click()
-    wait_for_pending(2)
+    wait_for_pending(page, 2)
     merchant.evaluate('() => window.releaseQueue()')
 
     expect(page.locator('#feedback')).to_contain_text('Review the current order')
@@ -503,7 +656,9 @@ def main():
             for decision in ('cancel', 'complete'):
                 run.case(f'{rail} reserve, {decision}, refresh', rail_flow(rail, decision))
         run.case('Merchant totals and event filters reconcile across rails', merchant_reconciliation)
+        run.case('Paired merchant rehearsal', merchant_rehearsal)
         run.case('Keyboard navigation through checkout and confirmation', keyboard_flow)
+        run.case('Saved v1.1 holds stay open across unlock and allow cancellation on both rails', saved_v11_decisions)
         run.case('Unreadable saved data is preserved with safe recovery options', corrupted_store)
         for w, h in [(320, 740), (390, 844), (768, 1024), (1280, 850)]:
             run.case(f'Route fit, labels and checkout fields at {w}px', partial(viewport_check, screenshots=args.screenshots), w, h, w < 600)
@@ -514,6 +669,7 @@ def main():
         run.case('Back closes an obsolete confirmation', stale_confirmation)
         run.case('Reset preserves meaningful keyboard focus', reset_focus)
         run.case('Queued checkout respects newer navigation', queued_checkout_navigation)
+        run.case('Queued checkout requires review if another tab changes the clock', clock_change_during_checkout)
         run.case('Another tab resets a hold before its queued confirmation', reset_during_confirmation)
         passed = sum(c['status'] == 'passed' for c in run.cases)
         report = {'executed_at_utc': datetime.now(timezone.utc).isoformat(),
@@ -594,10 +750,103 @@ def merchant_reconciliation(page, base):
     return result
 
 
+def merchant_rehearsal(page, base):
+    day = 86_400_000
+    entry = datetime(2026, 1, 12, 2, tzinfo=timezone.utc)  # 10:00 SGT
+    start = int(entry.timestamp() * 1000)
+    cutoff = start + 2 * day
+
+    def timestamp(ms):
+        return datetime.fromtimestamp(ms / 1000, timezone.utc).isoformat()
+
+    def card_totals():
+        values = page.locator('[data-totals="card"] .big, [data-totals="card"] .balance-mini b').all_text_contents()
+        assert all(value.startswith('S$') for value in values), values
+        cents = [int(Decimal(value[2:].replace(',', '')) * 100) for value in values]
+        return dict(zip(('held', 'funded', 'completed', 'refunded'), cents, strict=True))
+
+    # Reset this isolated browser context through the UI to seed both paths at a repeatable time.
+    visit(page, base, 'merchant')
+    page.clock.set_fixed_time(entry)
+    page.get_by_role('button', name='Reset demo data').click()
+    page.get_by_role('dialog').get_by_role('button', name='Reset demo').click()
+    expect(page.locator('#feedback')).to_contain_text('Sample orders and demo clock restored')
+    seeded = stored(page)
+    assert seeded['now'] == start
+    baseline_totals = card_totals()
+    shared = {'start': timestamp(start), 'cutoff': timestamp(cutoff),
+              'item': 'Arc table lamp', 'amount_sgd_cents': 18_000}
+
+    # Ordinary checkout exists only in this fixture. Entering never purchases the lamp.
+    rows = []
+    scripts = {'buy': 'confirm_purchase', 'decline': 'leave_checkout', 'leave': None}
+    for case_id, decision in scripts.items():
+        outcome = {'confirm_purchase': 'purchased', 'leave_checkout': 'declined', None: 'no_order'}[decision]
+        rows.append({**shared, 'case_id': case_id, 'path': 'ordinary_scripted_reference',
+                     'decision_at': timestamp(start) if decision else None, 'outcome': outcome,
+                     'fixture_step': decision or 'observe_cutoff_without_return'})
+    assert actions(stored(page)) == actions(seeded), 'Ordinary fixture moved demo funds'
+
+    order_ids = {}
+    for case_id in scripts:
+        snapshot = reserve(page, base, 'card', days=1)
+        opening = actions(snapshot)[-1]
+        assert (opening['type'], opening['at'], opening['holdMs'], opening['item'],
+                opening['rail'], opening['amount']) == ('hold', start, day, shared['item'], 'card', 18_000)
+        order_ids[case_id] = opening['orderId']
+        if case_id == 'decline':
+            act(page, 'cancel')
+    assert len(set(order_ids.values())) == 3
+    visit(page, base, 'customer/' + order_ids['buy'])
+    clock_unlock(page)
+    act(page, 'complete')
+    visit(page, base, 'merchant')
+    page.locator('[data-action=advance]').click()
+    expect(page.locator('#feedback')).to_contain_text('Demo clock advanced by one day')
+    final = stored(page)
+    assert final['now'] == cutoff
+    history = actions(final)
+    seed_count = len(actions(seeded))
+    assert history[:seed_count] == actions(seeded)
+    movements = history[seed_count:]
+    assert len(movements) == 5
+    expected = {
+        'buy': [('hold', start), ('complete', start + day)],
+        'decline': [('hold', start), ('cancel', start)],
+        'leave': [('hold', start)],
+    }
+    for case_id, order_id in order_ids.items():
+        events = [event for event in movements if event['orderId'] == order_id]
+        assert [(event['type'], event['at']) for event in events] == expected[case_id], events
+        last = events[-1]
+        outcome = {'complete': 'purchased', 'cancel': 'refunded', 'hold': 'hold_open'}[last['type']]
+        rows.append({**shared, 'case_id': case_id, 'path': 'delayedbuy',
+                     'decision_at': None if outcome == 'hold_open' else timestamp(last['at']),
+                     'outcome': outcome, 'order_id': order_id,
+                     'ledger_request_ids': [event['requestId'] for event in events]})
+
+    assert [(row['case_id'], row['outcome']) for row in rows] == [
+        ('buy', 'purchased'), ('decline', 'declined'), ('leave', 'no_order'),
+        ('buy', 'purchased'), ('decline', 'refunded'), ('leave', 'hold_open')]
+    observed_totals = {key: value - baseline_totals[key] for key, value in card_totals().items()}
+    assert observed_totals == {'held': 18_000, 'funded': 54_000, 'completed': 18_000, 'refunded': 18_000}
+    assert observed_totals['funded'] == sum(observed_totals[key] for key in ('completed', 'refunded', 'held'))
+    paths = {}
+    for path in ('ordinary_scripted_reference', 'delayedbuy'):
+        cohort = [row for row in rows if row['path'] == path]
+        paths[path] = {'starts': len(cohort), 'purchases': sum(row['outcome'] == 'purchased' for row in cohort)}
+        assert paths[path] == {'starts': 3, 'purchases': 1}
+    return {'rows': rows, 'paths': paths, 'ordinary_ledger_movements': 0,
+            'delayedbuy_ledger_movements': len(movements), 'delayedbuy_sgd_cents': observed_totals}
+
+
 def no_script_explanation(page, base):
     expect(page.locator('main .boot-help p').first).to_be_visible()
     expect(page.locator('main')).to_contain_text('Enable JavaScript to choose a waiting period')
     expect(page.locator('main')).to_contain_text('The checkout simulation pays no interest')
+    for term in ('sets aside demo funds and fixes your price', 'This demo reserves no stock.',
+                 'no automatic expiry', 'Complete purchase, then Confirm purchase', 'cancel any time before buying'):
+        expect(page.locator('main')).to_contain_text(term)
     expect(page.locator('main')).not_to_contain_text('Loading')
     expect(page.locator('#checkout-form')).to_have_count(0)
     return {'static_explanation_visible': True}
@@ -624,6 +873,8 @@ def standalone_check(page, base):
     page.wait_for_function('document.querySelector(".hero .product-shot").naturalWidth > 0')
     assert image.get_attribute('src').startswith('data:image/')
     expect(page.locator('.sim-badge')).to_have_text('Simulation')
+    visit(page, base, 'checkout')
+    checkout_answers(page, 'S$180.00', stored(page)['now'] + 2 * DAY_MS)
     outcome = rail_flow('card', 'cancel')(page, base)
     return {'location': urlsplit(base).scheme, 'embedded_image_decoded': True, 'hold_and_cancel': outcome}
 
