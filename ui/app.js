@@ -27,6 +27,7 @@ let state;
 let loadError = false;
 let busy = false;
 let railFilter = 'all';
+const waitingPeriods = [1, 2, 7];
 let checkout = { rail: 'card', days: 2 };
 let pending = null;
 let feedbackTimer;
@@ -129,23 +130,20 @@ function productFigure(link = false, rail = 'card') {
     money(rail, rails[rail].amount) + '</small>' + end + '</span></div></' + tag + '>';
 }
 function homePage() {
-  const steps = [
-    ['box', 'Reserve an item', 'Choose a demo payment method and how long you want to wait. The full price goes into the simulated hold.'],
-    ['hourglass', 'Give it time', 'The item stays reserved through your waiting period. You can change your mind and cancel at any point while it is on hold.'],
-    ['split', 'Make the call', 'Once the wait ends, complete the purchase to pay the demo merchant, or cancel to return the principal to its original source.']
-  ];
-  return '<section class="frame hero"><div class="hero-copy"><div class="eyebrow kicker">Delayed checkout</div>' +
-    '<h1>Reserve now.<br><em>Decide later.</em></h1>' +
-    '<p>Hold the item you want, give yourself time to think, then choose whether to buy it.</p>' +
-    '<div class="hero-buttons"><a class="btn orange" href="#checkout">Try demo checkout ' + icon('arrow', 18) + '</a>' +
-    '<a class="text-link" href="#how">How it works ' + icon('down', 15) + '</a></div>' +
-    '<div class="hero-note"><a class="text-link" href="#report">Explore the illustrated report →</a></div>' +
-    '<div class="hero-note">' + icon('lock', 14) + ' No sign-up. No real payments.</div></div>' +
-    productFigure(true) + '</section>' +
-    '<section class="how-section" id="how" tabindex="-1"><div class="frame"><div class="section-head"><h2>How it works</h2>' +
-    '<p>You stay in control of the final purchase.</p></div><div class="steps">' +
-    steps.map(([symbol, title, copy], i) => '<article class="step"><div class="step-top"><span class="step-icon">' + icon(symbol, 22) + '</span><span class="micro">Step 0' + (i + 1) + '</span></div><h3>' + title + '</h3><p>' + copy + '</p></article>').join('') +
-    '</div></div></section>' +
+  const options = waitingPeriods.map(days => '<option value="' + days + '"' + (checkout.days === days ? ' selected' : '') + '>' +
+    days + (days === 1 ? ' day' : ' days') + '</option>').join('');
+  return '<section class="frame hero"><div class="hero-copy"><div class="eyebrow kicker">Checkout simulation</div>' +
+    '<h1>Hold the lamp.<br><em>Decide later.</em></h1>' +
+    '<p>Reserve the Arc table lamp. Cancel for a full refund while it’s on hold, or buy it when your wait ends.</p>' +
+    '<div class="hero-setup"><label for="preview-days">Waiting period</label><div class="hero-buttons">' +
+    '<select id="preview-days">' + options + '</select><a class="btn orange" href="#checkout">Set up my hold ' + icon('arrow', 18) +
+    '</a></div></div><div class="hero-note">' + icon('lock', 14) + ' Demo funds only. No sign-up.</div></div>' +
+    productFigure(true, checkout.rail) + '</section>' +
+    '<section class="how-section" id="how" tabindex="-1"><div class="frame"><div class="section-head"><h2>Where the payment goes</h2>' +
+    '<a class="text-link" href="#report">Explore the illustrated report ' + icon('diagonal', 15) + '</a></div>' +
+    '<div class="hold-flow"><div class="flow-origin">' + icon('hourglass', 24) + '<div><h3>Order hold</h3><p>The full demo price stays here until you decide.</p></div></div>' +
+    '<ul class="flow-options"><li class="refund-path">' + icon('refund', 20) + '<div><h3>Cancel while held</h3><p>Full amount → original demo card or wallet</p></div></li>' +
+    '<li class="purchase-path">' + icon('check', 20) + '<div><h3>Buy after the wait</h3><p>Full amount → demo merchant</p></div></li></ul></div></div></section>' +
     '<section class="showcase"><div class="frame show-grid"><div><span class="kicker">Merchant view</span><h2>Follow the money.</h2><p>See each hold, completed purchase, and refund in the demo ledger.</p></div><a class="btn outline" href="#merchant">Open merchant view ' +
     icon('arrow', 17) + '</a></div></section>';
 }
@@ -158,19 +156,19 @@ function checkoutPage() {
   const selected = checkout.rail;
   const option = (rail, symbol, title) => '<label class="choice"><input type="radio" name="rail" value="' + rail + '"' + (rail === selected ? ' checked' : '') +
     '><span>' + icon(symbol, 17) + title + '<i class="pick"></i></span></label>';
-  const days = [1,2,7].map(n => '<label class="choice"><input type="radio" name="days" value="' + n + '"' +
+  const days = waitingPeriods.map(n => '<label class="choice"><input type="radio" name="days" value="' + n + '"' +
     (n === checkout.days ? ' checked' : '') + '><span>' + (n === 1 ? '1 day' : n + ' days') + '</span></label>').join('');
   return '<div class="frame workspace">' + backLink() + '<div class="kicker">Simulation / Checkout</div><h1>Reserve your item.</h1>' +
-    '<p class="intro">Choose a payment method and a waiting period. You make the final purchase decision later.</p>' +
+    '<p class="intro">Choose how to fund the demo hold and when the option to buy opens.</p>' +
     '<div class="checkout-grid" id="checkout-grid">' + productFigure(false, selected) +
     '<form class="checkout-form" id="checkout-form"><fieldset aria-describedby="rail-help"><legend>Payment method</legend><div class="choices">' +
     option('card', 'card', 'SGD card') + option('usdc', 'coin', 'USDC wallet') + '</div>' +
     '<p class="help" id="rail-help">' + checkoutTerms() + '</p></fieldset>' +
-    '<fieldset><legend>Waiting period</legend><div class="choices durations">' + days + '</div><p class="help">The timer opens the option to buy. It never completes a purchase automatically.</p></fieldset>' +
+    '<fieldset><legend>Waiting period</legend><div class="choices durations">' + days + '</div><p class="help">You can cancel throughout the hold. Buying requires your confirmation after the wait.</p></fieldset>' +
     '<div class="summary-lines"><div class="summary-line"><span>Earliest completion</span><strong id="checkout-unlock">' + showDate(state.now + checkout.days * DAY) + ' SGT</strong></div>' +
-    '<div class="summary-line"><span>Customer yield</span><strong>None</strong></div><div class="summary-line total"><span>Amount held</span><strong id="checkout-total">' + money(selected, rails[selected].amount) + '</strong></div></div>' +
-    '<button type="submit" class="btn orange full">Reserve item ' + icon('arrow', 17) + '</button>' +
-    '<p class="payment-note">' + icon('lock', 14) + ' Simulation only. Demo prices are set independently for each payment method.</p></form></div></div>';
+    '<div class="summary-line"><span>Interest on this hold</span><strong>None</strong></div><div class="summary-line total"><span>Amount held</span><strong id="checkout-total">' + money(selected, rails[selected].amount) + '</strong></div></div>' +
+    '<button type="submit" class="btn orange full">Create demo hold ' + icon('arrow', 17) + '</button>' +
+    '<p class="payment-note">' + icon('lock', 14) + ' Card and wallet use separate demo prices.</p></form></div></div>';
 }
 function clockPanel() {
   return '<section class="clock-panel" aria-label="Simulation clock"><div class="clock-label">' + icon('clock', 20) +
@@ -201,8 +199,9 @@ function orderDetails(order, missing) {
   const isOpen = order.status === 'holding';
   let actions = '';
   if (isOpen) {
-    const unlock = order.eligible ? '' : '<button data-action="unlock" class="plain-button">Advance to end of wait</button>';
-    const help = order.eligible ? 'Your waiting period has ended. Choose what happens to this hold.' : 'Completion opens ' + showDate(order.unlockAt) + ' SGT. You can cancel now.';
+    const unlock = order.eligible ? '' : '<button data-action="unlock" class="plain-button">Skip the remaining demo wait</button>';
+    const daysLeft = Math.max(0, Math.ceil((order.unlockAt - state.now) / DAY));
+    const help = order.eligible ? 'Your waiting period has ended. Choose what happens to this hold.' : daysLeft + (daysLeft === 1 ? ' day' : ' days') + ' left on the demo clock. You can cancel now.';
     actions = '<p class="action-help">' + help + '</p>' + unlock + '<div class="action-row"><button class="btn orange" data-action="complete"' +
       (order.eligible ? '' : ' disabled') + '>Complete purchase ' + icon('check', 16) + '</button><button class="btn outline" data-action="cancel">Cancel hold ' + icon('refund', 15) + '</button></div>';
   } else {
@@ -228,9 +227,11 @@ function balanceCard(rail, totals) {
   const amount = number => money(rail, number);
   const funded = totals.held + totals.completed + totals.refunded;
   return '<section class="balance-card ' + rail + '" data-totals="' + rail + '"><h2>' + icon(rail === 'card' ? 'card' : 'coin', 19) +
-    (rail === 'card' ? 'SGD card ledger' : 'USDC wallet ledger') + '</h2><div class="big">' + amount(totals.held) + '</div><p class="money-label">Currently held for customers</p>' +
-    '<div class="balance-mini"><div>Gross funded<b>' + amount(funded) + '</b></div><div>Paid to merchant<b>' +
-    amount(totals.completed) + '</b></div><div>Returned to source<b>' + amount(totals.refunded) + '</b></div></div></section>';
+    (rail === 'card' ? 'SGD card ledger' : 'USDC wallet ledger') + '</h2><div class="big">' + amount(totals.held) + '</div><p class="money-label held-key">Currently held for customers</p>' +
+    '<div class="balance-track" aria-hidden="true"><span class="held" style="flex-grow:' + totals.held + '"></span>' +
+    '<span class="paid" style="flex-grow:' + totals.completed + '"></span><span class="returned" style="flex-grow:' + totals.refunded + '"></span></div>' +
+    '<div class="balance-mini"><div>Gross funded<b>' + amount(funded) + '</b></div><div class="paid-key">Paid to merchant<b>' +
+    amount(totals.completed) + '</b></div><div class="returned-key">Returned to source<b>' + amount(totals.refunded) + '</b></div></div></section>';
 }
 function ledgerRows(view) {
   const entries = view.orders.flatMap(order => order.events.map((event, index) => ({ order, event, index })))
@@ -276,7 +277,14 @@ function closeMenu() {
   menuButton.setAttribute('aria-expanded', 'false');
   menuButton.setAttribute('aria-label', 'Open menu');
 }
-function onRouteChange(event) {
+function focusOrder() {
+  const detail = document.querySelector('#order-detail');
+  if (!detail) return;
+  detail.tabIndex = -1;
+  detail.focus({ preventScroll: true });
+  if (window.matchMedia('(max-width: 640px)').matches) detail.scrollIntoView({ block: 'start' });
+}
+function onRouteChange() {
   navigationEpoch++;
   pending = null;
   if (dialog.open) dialog.close();
@@ -285,11 +293,8 @@ function onRouteChange(event) {
   if (route().page === 'how' && !loadError) {
     document.querySelector('#how').focus({ preventScroll: true });
     document.querySelector('#how').scrollIntoView();
-  } else if (route().page === 'customer' && new URL(event.oldURL).hash.startsWith('#customer') && document.querySelector('#order-detail')) {
-    const detail = document.querySelector('#order-detail');
-    detail.tabIndex = -1;
-    detail.focus({ preventScroll: true });
-    if (window.matchMedia('(max-width: 640px)').matches) detail.scrollIntoView({ block: 'start' });
+  } else if (route().page === 'customer' && route().id && document.querySelector('#order-detail')) {
+    focusOrder();
   } else {
     window.scrollTo(0, 0);
     main.focus({ preventScroll: true });
@@ -306,7 +311,7 @@ function ask(action) {
     : isCancel ? ['Cancel this hold?', 'Return ' + amount + ' for ' + order.item + ' to the original ' + rails[order.rail].label.toLowerCase() + '.', 'Confirm cancellation']
     : ['Complete this purchase?', 'Release ' + amount + ' for ' + order.item + ' to the demo merchant and close this hold.', 'Confirm purchase'];
   pending = { action, id, opening: order?.events[0] };
-  dialog.innerHTML = '<div class="dialog-box"><div class="kicker">Simulation</div><h2 id="dialog-title">' + config[0] + '</h2><p>' + escapeHtml(config[1]) +
+  dialog.innerHTML = '<div class="dialog-box"><div class="kicker">Simulation</div><h2 id="dialog-title">' + config[0] + '</h2><p id="dialog-description">' + escapeHtml(config[1]) +
     '</p><div class="action-row"><button type="button" class="btn outline" data-dismiss autofocus>Go back</button><button type="button" class="btn orange" data-confirm>' + config[2] + '</button></div></div>';
   dialog.showModal();
 }
@@ -359,6 +364,10 @@ function showError(error) {
   announce(error?.name === 'QuotaExceededError' ? 'The browser has no room to save this change.' : (error?.message || 'The change could not be saved.'));
 }
 main.addEventListener('click', event => {
+  if (event.target.closest('[data-explore-report]')) {
+    document.querySelector('#r-basket').focus();
+    return;
+  }
   const select = event.target.closest('[data-select]');
   if (select) { location.hash = '#customer/' + select.dataset.select; return; }
   const button = event.target.closest('[data-action]');
@@ -368,6 +377,11 @@ main.addEventListener('click', event => {
   else if (['advance','unlock'].includes(action)) perform(action, document.querySelector('#order-detail')?.dataset.order);
 });
 main.addEventListener('change', event => {
+  if (event.target.id === 'preview-days') {
+    const days = Number(event.target.value);
+    if (waitingPeriods.includes(days)) checkout.days = days;
+    return;
+  }
   if (event.target.matches('select[data-report]')) {
     const values = {basket:[25,100,250,1000], days:[1,7,14,30], apr:[0,2,4,8]};
     const key = event.target.dataset.report, value = Number(event.target.value);
@@ -432,7 +446,13 @@ menuButton.addEventListener('click', () => {
   menuButton.setAttribute('aria-expanded', String(open));
   menuButton.setAttribute('aria-label', open ? 'Close menu' : 'Open menu');
 });
-menu.addEventListener('click', closeMenu);
+menu.addEventListener('click', event => {
+  closeMenu();
+  if (event.target.closest('a')?.hash === location.hash) main.focus({ preventScroll: true });
+});
+document.querySelector('.site-header').addEventListener('focusout', event => {
+  if (!event.currentTarget.contains(event.relatedTarget)) closeMenu();
+});
 document.querySelector('.skip').addEventListener('click', event => {
   event.preventDefault();
   main.focus({ preventScroll: true });
@@ -453,5 +473,6 @@ async function boot() {
   catch { loadError = true; }
   render();
   if (route().page === 'how') document.querySelector('#how')?.scrollIntoView();
+  if (route().page === 'customer' && route().id) focusOrder();
 }
 boot();

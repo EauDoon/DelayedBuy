@@ -71,12 +71,12 @@ class Run:
         self.attempts = []
         self.local_paths = set()
 
-    def case(self, name, fn, width=1280, height=850, mobile=False):
+    def case(self, name, fn, width=1280, height=850, mobile=False, javascript=True):
         record = {'case': name, 'viewport': [width, height], 'status': 'failed'}
         before = time.monotonic()
         alerts = []
         context = self.browser.new_context(viewport={'width': width, 'height': height},
-                                           is_mobile=mobile, has_touch=mobile,
+                                           is_mobile=mobile, has_touch=mobile, java_script_enabled=javascript,
                                            timezone_id='Asia/Singapore', service_workers='block')
         context.set_default_timeout(4500)
         context.expose_binding('recordPaymentAttempt', lambda _, name: alerts.append(f'Unexpected payment API: {name}'))
@@ -123,7 +123,8 @@ class Run:
         try:
             page.goto(self.url, wait_until='networkidle')
             record['observed'] = fn(page, self.url)
-            assert page.evaluate('window.__paymentAttempts') == [], 'A real payment API was invoked'
+            if javascript:
+                assert page.evaluate('window.__paymentAttempts') == [], 'A real payment API was invoked'
             assert not alerts, ' | '.join(alerts)
             record['status'] = 'passed'
         except Exception as exc:
@@ -250,11 +251,68 @@ def viewport_check(page, base, screenshots=None):
     return measurements
 
 
+def landing_to_hold(page, base):
+    visit(page, base, 'home')
+    wait = page.get_by_label('Waiting period', exact=True)
+    wait.select_option('7')
+    setup = page.get_by_role('link', name='Set up my hold')
+    expect(setup).to_be_in_viewport()
+    setup.focus()
+    page.keyboard.press('Enter')
+    expect(page.locator('input[name=days][value="7"]')).to_be_checked()
+    before = len(actions(stored(page)))
+    submit = page.get_by_role('button', name='Create demo hold')
+    submit.focus()
+    page.keyboard.press('Enter')
+    detail = page.locator('#order-detail')
+    expect(detail).to_be_focused()
+    expect(detail.locator('.status')).to_be_in_viewport()
+    expect(detail).to_contain_text('7 days left')
+    cancel = detail.get_by_role('button', name='Cancel hold')
+    cancel.focus()
+    page.keyboard.press('Enter')
+    dialog = page.get_by_role('dialog', name='Cancel this hold?')
+    expect(dialog).to_have_accessible_description(re.compile(r'S\$180\.00.*demo card'))
+    expect(dialog.get_by_role('button', name='Go back')).to_be_focused()
+    page.keyboard.press('Escape')
+    expect(cancel).to_be_focused()
+    assert len(actions(stored(page))) == before + 1
+    page.go_back()
+    expect(page.locator('input[name=days][value="7"]')).to_be_checked()
+    page.go_back()
+    expect(wait).to_have_value('7')
+    assert len(actions(stored(page))) == before + 1
+    return {'wait_days': 7, 'new_holds': 1, 'dismissed_without_refund': True}
+
+
+def report_shortcut(page, base):
+    visit(page, base, 'report')
+    button = page.get_by_role('button', name='Explore the scenarios')
+    button.focus()
+    page.keyboard.press('Enter')
+    expect(page.get_by_role('combobox', name='Basket', exact=True)).to_be_focused()
+    expect(page.locator('.r-comparison')).to_contain_text('−S$0.0950')
+    page.get_by_role('combobox', name='Basket', exact=True).select_option('25')
+    expect(page.locator('.r-comparison')).to_contain_text('S$100 equivalent basket')
+    page.get_by_text('Read the assumptions and limits', exact=True).click()
+    with page.expect_download() as saved:
+        page.get_by_role('link', name='Download the 64 card-funded cases (CSV)').click()
+    assert saved.value.suggested_filename == 'sensitivity.csv'
+    assert Path(saved.value.path()).read_text() == (ROOT / 'economics/sensitivity.csv').read_text()
+    return {'keyboard_shortcut': True, 'fixed_wallet_example': True, 'offline_csv_matched': True}
+
+
 def mobile_navigation(page, base):
     visit(page, base, 'home')
     menu = page.get_by_role('button', name='Open menu')
     expect(menu).to_be_visible()
-    menu.click()
+    menu.focus()
+    page.keyboard.press('Enter')
+    page.keyboard.press('Tab')
+    expect(page.locator('#primary-nav a').first).to_be_focused()
+    page.keyboard.press('Escape')
+    expect(menu).to_be_focused()
+    page.keyboard.press('Enter')
     toggler = page.locator('button[aria-controls="primary-nav"]')
     expect(toggler).to_have_attribute('aria-expanded', 'true')
     page.locator('#primary-nav').get_by_role('link', name='Merchant view').click()
@@ -385,16 +443,28 @@ def reset_during_confirmation(page, base):
     merchant.locator('[data-action=reset]').click()
 
     # Queue the reset ahead of the already-reviewed decision using the real cross-tab lock.
-    merchant.evaluate("""key => {
-        navigator.locks.request(key, () => new Promise(resolve => { window.releaseQueue = resolve; }));
-    }""", KEY)
-    merchant.wait_for_function("typeof window.releaseQueue === 'function'")
-    pending_count = """async ([key, n]) =>
-        (await navigator.locks.query()).pending.filter(lock => lock.name === key).length === n"""
+    merchant.evaluate("""key => new Promise(acquired => {
+        navigator.locks.request(key, () => new Promise(resolve => {
+            window.releaseQueue = resolve;
+            acquired();
+        }));
+    })""", KEY)
+
+    def wait_for_pending(count):
+        # Poll from the test process; the page's CSP also applies under the fixed clock.
+        deadline = time.monotonic() + 4
+        while time.monotonic() < deadline:
+            pending = page.evaluate("""async key =>
+                (await navigator.locks.query()).pending.filter(lock => lock.name === key).length""", KEY)
+            if pending == count:
+                return
+            time.sleep(0.01)
+        raise AssertionError(f'Expected {count} queued demo locks, found {pending}')
+
     merchant.locator('[data-confirm]').click()
-    page.wait_for_function(pending_count, arg=[KEY, 1])
+    wait_for_pending(1)
     page.locator('[data-confirm]').click()
-    page.wait_for_function(pending_count, arg=[KEY, 2])
+    wait_for_pending(2)
     merchant.evaluate('() => window.releaseQueue()')
 
     expect(page.locator('#feedback')).to_contain_text('Review the current order')
@@ -437,6 +507,8 @@ def main():
         run.case('Unreadable saved data is preserved with safe recovery options', corrupted_store)
         for w, h in [(320, 740), (390, 844), (768, 1024), (1280, 850)]:
             run.case(f'Route fit, labels and checkout fields at {w}px', partial(viewport_check, screenshots=args.screenshots), w, h, w < 600)
+        run.case('Mobile hold setup, confirmation and Back', landing_to_hold, 390, 844, True)
+        run.case('Keyboard scenario shortcut and offline CSV', report_shortcut)
         run.case('Mobile menu opens, navigates and closes', mobile_navigation, 390, 844, True)
         run.case('Scenario report thresholds and accessible controls', report_interaction)
         run.case('Back closes an obsolete confirmation', stale_confirmation)
@@ -455,16 +527,24 @@ def main():
             file_mode.case('Standalone HTML opened directly as file://', standalone_check)
             loopback = Run(browser, base + 'delayedbuy-demo.html')
             loopback.case('Identical standalone HTML served alone on loopback', standalone_check)
+            loopback.case('Standalone hold with browser storage unavailable', standalone_without_storage)
+            loopback.case('Standalone explanation without JavaScript', no_script_explanation, javascript=False)
+            loopback.case('Standalone scenario shortcut and offline CSV', report_shortcut)
             report['standalone'] = {
                 'file': standalone_path.name, 'sha256': hashlib.sha256(standalone_path.read_bytes()).hexdigest(),
                 'unexpected_request_attempts': file_mode.attempts + loopback.attempts,
-                'direct_file': file_mode.cases[0], 'loopback': loopback.cases[0]}
+                'direct_file': file_mode.cases[0], 'loopback': loopback.cases[0],
+                'without_storage': loopback.cases[1], 'without_javascript': loopback.cases[2],
+                'scenario_download': loopback.cases[3]}
         browser.close()
     OUTPUT.parent.mkdir(parents=True, exist_ok=True)
     OUTPUT.write_text(json.dumps(report, indent=2, ensure_ascii=False) + '\n', encoding='utf-8')
     print(f'{passed}/{len(run.cases)} passed. Receipt: {OUTPUT}')
-    if args.standalone and (report['standalone']['direct_file']['status'] == 'failed' or report['standalone']['loopback']['status'] != 'passed'):
-        return 1
+    if args.standalone:
+        standalone = report['standalone']
+        required = ('loopback', 'without_storage', 'without_javascript', 'scenario_download')
+        if standalone['direct_file']['status'] == 'failed' or any(standalone[key]['status'] != 'passed' for key in required):
+            return 1
     return 0 if passed == len(run.cases) else 1
 
 
@@ -512,6 +592,29 @@ def merchant_reconciliation(page, base):
     page.locator('#rail-filter').select_option('all')
     expect(page.locator('#ledger-rows tr')).to_have_count(8)
     return result
+
+
+def no_script_explanation(page, base):
+    expect(page.locator('main .boot-help p').first).to_be_visible()
+    expect(page.locator('main')).to_contain_text('Enable JavaScript to choose a waiting period')
+    expect(page.locator('main')).to_contain_text('The checkout simulation pays no interest')
+    expect(page.locator('main')).not_to_contain_text('Loading')
+    expect(page.locator('#checkout-form')).to_have_count(0)
+    return {'static_explanation_visible': True}
+
+
+def standalone_without_storage(page, base):
+    page.add_init_script("""for (const name of ['localStorage', 'sessionStorage']) {
+        Object.defineProperty(window, name, {get() { throw new DOMException('Storage unavailable', 'SecurityError'); }});
+    }""")
+    page.reload(wait_until='load')
+    visit(page, base, 'checkout')
+    option(page, 'rail', 'usdc')
+    page.get_by_role('button', name='Create demo hold').click()
+    expect(page.locator('#order-detail dd.money')).to_have_text('135.00 USDC')
+    act(page, 'cancel')
+    expect(page.locator('#order-detail .action-help')).to_contain_text('original demo wallet')
+    return {'in_memory_hold_and_refund': True}
 
 
 def standalone_check(page, base):

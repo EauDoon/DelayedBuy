@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
+import {fundingComparison, sensitivityCsv} from '../ui/report-data.mjs';
 import {reportResults,reportSummary,reportPage} from '../ui/report.mjs';
 const csv = readFileSync(new URL('../economics/sensitivity.csv',import.meta.url),'utf8').trim().split(/\r?\n/);
 const [header,...lines]=csv, keys=header.split(',');
@@ -29,4 +30,29 @@ test('high case stays bounded; invalid selections fail closed',()=>{
 });
 test('offline report includes accessible labels, method and return path',()=>{
  const s=reportPage();assert.match(s,/id="r-results" aria-live="polite"/);assert.equal((s.match(/<label>/g)||[]).length,3);assert.match(s,/href="#checkout"/);assert.match(s,/No money is invested/);assert.doesNotMatch(s,/https?:\/\//);
+});
+
+test('fixed card and funded-wallet examples reproduce the source scenarios', () => {
+  const source = readFileSync(new URL('../economics/scenarios.csv', import.meta.url), 'utf8').trim().split(/\r?\n/);
+  const columns = source.shift().split(',');
+  const expected = new Map(source.map(line => {
+    const row = Object.fromEntries(line.split(',').map((value, i) => [columns[i], value]));
+    return [row.scenario, row];
+  }));
+  const names = ['base cohort', 'existing funded stablecoin wallets'];
+  const comparisons = fundingComparison();
+  assert.equal(comparisons.length, 2);
+  comparisons.forEach((row, i) => {
+    for (const [key, value] of Object.entries(row)) assert.equal(value, expected.get(names[i])[key]);
+    assert.equal(row.principal, '100');
+    assert.equal(row.apr, '0.04');
+    assert.equal(row.complete_days, row.cancel_days);
+    assert.equal(row.cancel_days, '7');
+    assert.equal(row.cancel_rate, '0.25');
+  });
+  const page = reportPage();
+  for (const phrase of ['64 card-funded cases', '−S$0.0950', 'S$3.0225', 'continuous estimates', '0.04 means 4%']) {
+    assert.ok(page.includes(phrase), phrase);
+  }
+  assert.equal(sensitivityCsv().trim(), csv.join('\n'));
 });

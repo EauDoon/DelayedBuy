@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-JwLrf3p6c0hcoUAoPK0dhgpGpURwXZp91e1vK/yMjH8='; style-src 'unsafe-inline'; img-src data:; font-src data:; connect-src 'none'; form-action 'none'; base-uri 'none'; object-src 'none'">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-NeCfX7eg5erJyvm1Q1/yg2UURB9dTFOJuwqtX8h4Jdo='; style-src 'unsafe-inline'; img-src data:; font-src data:; connect-src 'none'; form-action 'none'; base-uri 'none'; object-src 'none'">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#faf8f2">
   <meta name="description" content="Try delayedbuy, a simulated checkout that reserves an item and gives you time to decide.">
@@ -20,6 +20,9 @@
   --lilac: #ddcdf1;
   --lime: #d4e7ae;
   --charcoal: #29272a;
+  --held-ink: #815019;
+  --paid-ink: #235f49;
+  --returned-ink: #694889;
   --serif: "Baskervville",Georgia,"Times New Roman",serif;
   --sans: "DM Sans","Helvetica Neue",Arial,sans-serif;
   --mono: "IBM Plex Mono","Courier New",monospace;
@@ -156,6 +159,7 @@ main:focus {
 }
 
 .nav-end {
+  order: 1;
   display: flex;
   align-items: center;
   gap: 16px
@@ -261,12 +265,33 @@ h1 em,h2 em {
   color: #54504d
 }
 
+.hero-setup {
+  margin-top: 24px;
+  max-width: 420px
+}
+
+.hero-setup label {
+  display: block;
+  font-weight: 650;
+  font-size: 14px
+}
+
+.hero-setup select {
+  color: var(--ink);
+  background: var(--sheet);
+  border: 1px solid #80776e;
+  border-radius: 6px;
+  min-height: 46px;
+  padding: 8px 30px 8px 12px;
+  font-weight: 600
+}
+
 .hero-buttons {
   display: flex;
   align-items: center;
-  gap: 24px;
+  gap: 10px;
   flex-wrap: wrap;
-  margin: 29px 0 18px
+  margin: 6px 0 12px
 }
 
 .btn {
@@ -467,65 +492,91 @@ a.product-figure:hover .round-icon {
   text-align: right
 }
 
-.steps {
+.hold-flow {
   display: grid;
-  grid-template-columns: repeat(3,1fr);
-  gap: 16px
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.45fr);
+  align-items: center;
+  gap: 40px
 }
 
-.step {
-  display: flex;
-  flex-direction: column;
-  padding: 23px 23px 24px;
-  min-height: 180px;
-  background: #f0ebdf;
-  border: 1px solid #d4cbbb;
-  border-radius: 9px
-}
-
-.step:nth-child(2) {
-  background: #e9e2f1;
-  border-color: #cfc2dc
-}
-
-.step:nth-child(3) {
-  background: #e6ecd7;
-  border-color: #c6cfb3
-}
-
-.step-top {
+.flow-origin,.flow-options li {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  margin-bottom: 22px
+  gap: 15px;
+  border-radius: 8px;
+  padding: 18px 22px
 }
 
-.step-top .micro {
-  color: #66605c;
-  font-size: 10px
+.flow-origin {
+  background: #fae5c8;
+  border: 1px solid #b39163;
+  color: #4b361a;
+  position: relative
 }
 
-.step-icon {
-  width: 37px;
-  height: 37px;
+.hold-flow h3 {
+  margin: 0 0 3px;
+  line-height: 1.25;
+  letter-spacing: -.025em;
+  font-size: 19px
+}
+
+.hold-flow p {
+  font-size: 14px
+}
+
+.flow-options {
   display: grid;
-  place-items: center;
-  border: 1px solid #9f9485;
-  border-radius: 50%
+  gap: 12px;
+  list-style: none;
+  margin: 0;
+  padding: 0
 }
 
-.step h3 {
-  font-size: 22px;
-  line-height: 1.2;
-  letter-spacing: -.04em;
-  margin-bottom: 6px
+.flow-options li {
+  position: relative
 }
 
-.step p {
-  color: #56524f;
-  font-size: 14px;
-  line-height: 1.46;
-  max-width: 360px
+.flow-origin::after,.flow-options li::before {
+  content: "";
+  position: absolute;
+  border-color: #7d756c;
+  border-style: solid
+}
+
+.flow-origin::after {
+  left: 100%;
+  width: 21px;
+  top: 50%;
+  border-width: 1px 0 0
+}
+
+.flow-options li::before {
+  right: 100%;
+  width: 20px;
+  height: calc(50% + 7px)
+}
+
+.refund-path {
+  color: #4d3263;
+  background: #ede3f5;
+  border: 1px solid #bda7cb
+}
+
+.refund-path::before {
+  top: 50%;
+  border-width: 1px 0 0 1px
+}
+
+.purchase-path {
+  color: #214b39;
+  background: #e4efdf;
+  border: 1px solid #9fba9d
+}
+
+.purchase-path::before {
+  bottom: 50%;
+  border-width: 0 0 1px 1px
 }
 
 .showcase {
@@ -949,12 +1000,21 @@ legend,.field-label {
   height: 6px
 }
 
-.status.ready,.status.completed {
+.status.ready {
+  background: #d8eee9;
+  color: #204e44
+}
+
+.status.ready i {
+  background: #236957
+}
+
+.status.completed {
   background: #e0ead1;
   color: #3f532b
 }
 
-.status.ready i,.status.completed i {
+.status.completed i {
   background: #648344
 }
 
@@ -1104,6 +1164,32 @@ legend,.field-label {
 .balance-card .money-label {
   font-size: 12px;
   color: #514b55
+}
+
+.balance-track {
+  display: flex;
+  height: 9px;
+  overflow: hidden;
+  background: #d0c9bc;
+  border-radius: 3px;
+  margin: 12px 0
+}
+
+.balance-track span {
+  flex-basis: 0
+}
+
+.balance-track .held,.held-key::before {background: var(--held-ink)}
+.balance-track .paid,.paid-key::before {background: var(--paid-ink)}
+.balance-track .returned,.returned-key::before {background: var(--returned-ink)}
+
+.held-key::before,.paid-key::before,.returned-key::before {
+  content: "";
+  display: inline-block;
+  width: .65em;
+  height: .65em;
+  margin-inline-end: .4em;
+  border-radius: 1px
 }
 
 .balance-mini {
@@ -1318,10 +1404,6 @@ dialog::backdrop {
     gap: 25px
   }
 
-  .step {
-    padding: 18px
-  }
-
   .hero-buttons {
     gap: 16px
   }
@@ -1387,7 +1469,7 @@ dialog::backdrop {
   }
 
   .hero-buttons {
-    margin: 18px 0 12px;
+    margin: 6px 0 12px;
     gap: 12px
   }
 
@@ -1396,32 +1478,12 @@ dialog::backdrop {
     padding: 9px 12px
   }
 
-  .hero-buttons .text-link {
-    font-size: 12px
-  }
-
   .hero .product-shot {
     aspect-ratio: .96
   }
 
   .section-head {
     align-items: flex-start
-  }
-
-  .steps {
-    gap: 9px
-  }
-
-  .step {
-    padding: 14px
-  }
-
-  .step h3 {
-    font-size: 19px
-  }
-
-  .step p {
-    font-size: 13px
   }
 
   .customer-grid {
@@ -1523,7 +1585,7 @@ dialog::backdrop {
   }
 
   .hero h1 {
-    font-size: clamp(56px,11.8vw,74px);
+    font-size: clamp(43px,12.2vw,67px);
     margin: 14px 0 15px
   }
 
@@ -1533,17 +1595,13 @@ dialog::backdrop {
   }
 
   .hero-buttons {
-    margin: 18px 0 10px;
-    gap: 19px
+    margin: 6px 0 10px;
+    gap: 8px
   }
 
   .hero-buttons .btn {
     min-height: 44px;
     padding: 10px 14px
-  }
-
-  .hero-buttons .text-link {
-    font-size: 14px
   }
 
   .hero .product-shot {
@@ -1580,39 +1638,48 @@ dialog::backdrop {
     margin-top: 8px
   }
 
-  .steps {
-    grid-template-columns: 1fr
+  .section-head .text-link {
+    margin-top: 10px
   }
 
-  .step {
-    padding: 16px 18px 17px;
-    min-height: 0;
-    display: grid;
-    grid-template-columns: 48px 1fr;
-    column-gap: 12px
+  .hold-flow {
+    grid-template-columns: minmax(0,1fr);
+    gap: 12px
   }
 
-  .step-top {
-    grid-row: span 2;
-    flex-direction: column;
-    justify-content: flex-start;
-    gap: 6px;
-    align-self: start;
-    margin: 0
+  .flow-origin,.flow-options li {
+    padding: 14px 16px
   }
 
-  .step-top .micro {
-    font-size: 8px;
-    letter-spacing: .035em
+  .flow-options {
+    margin-left: 22px
   }
 
-  .step h3 {
-    align-self: end;
-    font-size: 20px
+  .flow-origin::after {
+    top: 100%;
+    left: 10px;
+    height: 13px;
+    width: 0;
+    border-width: 0 0 0 1px
   }
 
-  .step p {
-    font-size: 14px
+  .flow-options li::before {
+    left: -13px;
+    right: auto;
+    width: 12px;
+    bottom: 50%;
+    top: auto;
+    height: calc(50% + 14px);
+    border-width: 0 0 1px 1px
+  }
+
+  .flow-options li:first-child::after {
+    content: "";
+    position: absolute;
+    left: -13px;
+    top: 50%;
+    height: calc(50% + 14px);
+    border-left: 1px solid #7d756c
   }
 
   .show-grid {
@@ -1772,7 +1839,7 @@ dialog::backdrop {
 
 @media (max-width:370px) {
   .hero h1 {
-    font-size: 53px
+    font-size: 43px
   }
 
   .micro,.kicker {
@@ -1860,14 +1927,39 @@ dialog::backdrop {
 .r-net small{display:block;font-size:.8rem;border-top:1px solid #bf9486;padding-top:.7rem}
 .r-bars-list{display:grid;gap:9px;margin:20px 0 5px}
 .r-bar-row{display:grid;grid-template-columns:3ch 1fr 9ch;align-items:center;gap:10px;font:500 .8rem/1.4 var(--mono)}
-.r-bar-row strong{text-align:right;white-space:nowrap}.r-track i{height:10px;display:block;background:#52977f}.r-track{height:10px;background:#deded0;border-left:1px solid #32483d}
+.r-bar-row strong{text-align:right;white-space:nowrap}.r-track i{height:10px;display:block;background:#417761}.r-track{height:10px;background:#deded0;border-left:1px solid #32483d}
 .r-active .r-track i{background:#344d43}.r-active{font-weight:700}
 .r-method{border-block:1px solid var(--r-line);margin:25px 0}.r-method summary{cursor:pointer;padding:17px 0}.r-method p{max-width:72ch;font-size:.93rem}
 .r-close{background:#dce9c4;max-width:100%}.r-close p{max-width:70ch}.r-page a:focus-visible,.r-page summary:focus-visible,.r-page select:focus-visible{outline:3px solid #9361c0;outline-offset:3px}
 @media(max-width:760px){.r-cover-inner{grid-template-columns:1fr 0.72fr;gap:22px}.r-analysis{grid-template-columns:1fr}.r-controls-head{align-items:start;flex-direction:column;gap:0}}
 @media(max-width:580px){.r-cover-inner{grid-template-columns:1fr}.r-figure{max-width:290px}.r-poster svg{max-height:145px}.r-controls{gap:.4rem}.r-ticket-title{align-items:start;flex-direction:column;gap:.15rem}.r-cell-grid{grid-template-columns:1fr}.r-cell{display:flex;align-items:baseline;justify-content:space-between;gap:12px}.r-cell+.r-cell{border-left:0;border-top:1px dashed var(--r-line)}.r-cell b{white-space:nowrap}.r-controls select{padding:.3rem .2rem;font-size:.9rem}.r-bars,.r-net,.r-close{padding:16px}}
 
+.r-cover .r-cover-link { background: #f8b49b; color: #263d35; border: 1px solid #f5c7b6; border-radius: 5px; padding: .65rem 1rem; text-decoration: none }
+.r-cover .r-cover-link:hover { background: #ffcfb9 }
+.r-cover .r-cover-link:focus-visible { outline-color: #fff9e7 }
+.boot-help p { max-width: 64ch; margin-top: 1rem }
+
+.r-comparison {
+  padding: clamp(17px, 2.5vw, 30px);
+  border: 1px solid var(--r-line);
+  background: #fffdf6
+}
+.r-comparison p { max-width: 76ch; margin: .65rem 0; line-height: 1.5 }
+.r-comparison table { width: 100%; min-width: 0; margin: 1rem 0; table-layout: fixed }
+.r-comparison caption { text-align: left; font-weight: 650; padding-bottom: .5rem }
+.r-comparison th,.r-comparison td { white-space: normal; font: inherit; letter-spacing: normal; text-transform: none; padding: .55rem }
+.r-comparison th { text-align: left }
+.r-comparison tr > :first-child { width: 44% }
+.r-comparison tr > :nth-child(n+2) { text-align: right; font-variant-numeric: tabular-nums }
+.r-comparison tbody tr:last-child { background: #e5ecdc; font-weight: 700 }
+.r-method a { text-decoration: underline; text-underline-offset: 3px }
+@media (max-width: 580px) {
+  .r-comparison th,.r-comparison td { font-size: .84rem; padding: .45rem .18rem }
+  .r-comparison tr > :first-child { width: 40% }
+}
+
 </style>
+  <noscript><style>#primary-nav, .menu-button, .foot-nav { display: none }</style></noscript>
   
 </head>
 <body>
@@ -1875,29 +1967,33 @@ dialog::backdrop {
   <header class="site-header">
     <div class="nav-frame">
       <a href="#home" class="brand" aria-label="delayedbuy home"><img src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA0MCA0MCI+PHJlY3Qgd2lkdGg9IjQwIiBoZWlnaHQ9IjQwIiByeD0iMTAiIGZpbGw9IiNmZjY1M2UiLz48ZyBmaWxsPSIjMjMxZjIwIj48cGF0aCBkPSJNNy45IDkuMmgyNC4ybC00LjQgNS45SDEyLjN6Ii8+PHBhdGggZD0iTTEzLjMgMTYuNWgxMy40TDIwIDI1LjN6Ii8+PHBhdGggZD0ibTIwIDI0LjQgNS41IDcuMkgxNC41eiIvPjwvZz48L3N2Zz4K" width="33" height="33" alt="">delayedbuy</a>
+      <div class="nav-end"><span class="sim-badge"><i></i> Simulation</span>
+        <button type="button" class="menu-button" aria-controls="primary-nav" aria-expanded="false" aria-label="Open menu"><span></span><span></span></button>
+      </div>
       <nav id="primary-nav" aria-label="Primary">
         <a href="#report">Report</a>
         <a href="#how">How it works</a>
         <a href="#customer">Customer view</a>
         <a href="#merchant">Merchant view</a>
       </nav>
-      <div class="nav-end"><span class="sim-badge"><i></i> Simulation</span>
-        <button type="button" class="menu-button" aria-controls="primary-nav" aria-expanded="false" aria-label="Open menu"><span></span><span></span></button>
-      </div>
     </div>
   </header>
   <main id="main" tabindex="-1">
-    <div class="frame boot"><span class="kicker">Simulated checkout</span><h1>Reserve now.<br><em>Decide later.</em></h1><p>Loading the demo…</p></div>
+    <div class="frame boot">
+      <span class="kicker">Checkout simulation</span><h1>Hold the lamp.<br><em>Decide later.</em></h1>
+      <p>Reserve a fictional Arc table lamp and decide after the wait.</p>
+      <div class="boot-help"><p>Enable JavaScript to choose a waiting period and try checkout. No money moves.</p>
+        <p>In the separate report model, S$100 held for seven days at an assumed 4% annual rate earns about S$0.0767 gross. The shopper’s modeled cancellation share is S$0.06. The checkout simulation pays no interest.</p></div>
+    </div>
   </main>
   <div id="feedback" role="status" aria-live="polite" aria-atomic="true"></div>
-  <dialog id="confirm-dialog" aria-labelledby="dialog-title"></dialog>
+  <dialog id="confirm-dialog" aria-labelledby="dialog-title" aria-describedby="dialog-description"></dialog>
   <footer>
     <div class="frame foot-grid">
       <div><a href="#home" class="brand"><img src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA0MCA0MCI+PHJlY3Qgd2lkdGg9IjQwIiBoZWlnaHQ9IjQwIiByeD0iMTAiIGZpbGw9IiNmZjY1M2UiLz48ZyBmaWxsPSIjMjMxZjIwIj48cGF0aCBkPSJNNy45IDkuMmgyNC4ybC00LjQgNS45SDEyLjN6Ii8+PHBhdGggZD0iTTEzLjMgMTYuNWgxMy40TDIwIDI1LjN6Ii8+PHBhdGggZD0ibTIwIDI0LjQgNS41IDcuMkgxNC41eiIvPjwvZz48L3N2Zz4K" width="28" height="28" alt="">delayedbuy</a><p>A simulated checkout. No real funds move.</p></div>
       <div class="foot-nav"><a href="#checkout">Try checkout</a><a href="#customer">Customer view</a><a href="#merchant">Merchant view</a></div>
     </div>
   </footer>
-  <noscript><p class="noscript">The price of a pause: at an assumed 4% annual rate, S$100 held for seven days earns about S$0.0767 gross. In this model, S$0.06 goes to the shopper on cancellation. Enable JavaScript to explore 64 cases and the checkout simulation. No money moves.</p></noscript>
 <script>(() => {
 "use strict";
 const demoModule0 = (() => {
@@ -2063,11 +2159,13 @@ return { createLedger, validateLedger, importLedger, applyAction, getView, demoL
 const demoModule1 = (() => {
 // Generated by scripts/build_report_data.py; rows are display values, not financial quotes.
 function reportRows() { return [[25,1,0,"0.0000","0.00","0.00","-0.5125"],[25,1,2,"0.0014","0.00","0.00","-0.5125"],[25,1,4,"0.0027","0.00","0.00","-0.5125"],[25,1,8,"0.0055","0.00","0.00","-0.5125"],[25,7,0,"0.0000","0.00","0.00","-0.5125"],[25,7,2,"0.0096","0.00","0.00","-0.5125"],[25,7,4,"0.0192","0.01","0.00","-0.5050"],[25,7,8,"0.0384","0.02","0.01","-0.4875"],[25,14,0,"0.0000","0.00","0.00","-0.5125"],[25,14,2,"0.0192","0.01","0.00","-0.5050"],[25,14,4,"0.0384","0.02","0.01","-0.4875"],[25,14,8,"0.0767","0.06","0.01","-0.4575"],[25,30,0,"0.0000","0.00","0.00","-0.5125"],[25,30,2,"0.0411","0.03","0.01","-0.4800"],[25,30,4,"0.0822","0.06","0.02","-0.4475"],[25,30,8,"0.1644","0.13","0.03","-0.3850"],[100,1,0,"0.0000","0.00","0.00","-1.2250"],[100,1,2,"0.0055","0.00","0.00","-1.2250"],[100,1,4,"0.0110","0.01","0.00","-1.2175"],[100,1,8,"0.0219","0.02","0.00","-1.2100"],[100,7,0,"0.0000","0.00","0.00","-1.2250"],[100,7,2,"0.0384","0.02","0.01","-1.2000"],[100,7,4,"0.0767","0.06","0.01","-1.1700"],[100,7,8,"0.1534","0.12","0.03","-1.1050"],[100,14,0,"0.0000","0.00","0.00","-1.2250"],[100,14,2,"0.0767","0.06","0.01","-1.1700"],[100,14,4,"0.1534","0.12","0.03","-1.1050"],[100,14,8,"0.3068","0.24","0.06","-0.9850"],[100,30,0,"0.0000","0.00","0.00","-1.2250"],[100,30,2,"0.1644","0.13","0.03","-1.0975"],[100,30,4,"0.3288","0.26","0.06","-0.9700"],[100,30,8,"0.6575","0.52","0.13","-0.7050"],[250,1,0,"0.0000","0.00","0.00","-2.6500"],[250,1,2,"0.0137","0.01","0.00","-2.6425"],[250,1,4,"0.0274","0.02","0.00","-2.6350"],[250,1,8,"0.0548","0.04","0.01","-2.6100"],[250,7,0,"0.0000","0.00","0.00","-2.6500"],[250,7,2,"0.0959","0.07","0.02","-2.5775"],[250,7,4,"0.1918","0.15","0.04","-2.4975"],[250,7,8,"0.3836","0.30","0.08","-2.3450"],[250,14,0,"0.0000","0.00","0.00","-2.6500"],[250,14,2,"0.1918","0.15","0.04","-2.4975"],[250,14,4,"0.3836","0.30","0.08","-2.3450"],[250,14,8,"0.7671","0.61","0.15","-2.0425"],[250,30,0,"0.0000","0.00","0.00","-2.6500"],[250,30,2,"0.4110","0.33","0.08","-2.3225"],[250,30,4,"0.8219","0.66","0.16","-1.9950"],[250,30,8,"1.6438","1.31","0.33","-1.3375"],[1000,1,0,"0.0000","0.00","0.00","-9.7750"],[1000,1,2,"0.0548","0.04","0.01","-9.7350"],[1000,1,4,"0.1096","0.08","0.02","-9.6950"],[1000,1,8,"0.2192","0.17","0.04","-9.6075"],[1000,7,0,"0.0000","0.00","0.00","-9.7750"],[1000,7,2,"0.3836","0.30","0.08","-9.4700"],[1000,7,4,"0.7671","0.61","0.15","-9.1675"],[1000,7,8,"1.5342","1.22","0.31","-8.5500"],[1000,14,0,"0.0000","0.00","0.00","-9.7750"],[1000,14,2,"0.7671","0.61","0.15","-9.1675"],[1000,14,4,"1.5342","1.22","0.31","-8.5500"],[1000,14,8,"3.0685","2.45","0.61","-7.3275"],[1000,30,0,"0.0000","0.00","0.00","-9.7750"],[1000,30,2,"1.6438","1.31","0.33","-8.4625"],[1000,30,4,"3.2877","2.62","0.66","-7.1500"],[1000,30,8,"6.5753","5.26","1.31","-4.5200"]]; }
+function fundingComparison() { return [{"principal":"100","apr":"0.04","complete_days":"7","cancel_days":"7","cancel_rate":"0.25","avg_merchant_yield":"0.0550","card":"3.90","refund":"0.00","conversion":"0.1000","disputes":"0.0975000","gas":"0.05","ops":"0.10","total_cost":"4.2475000","control_cost":"3.0225000","incremental_result":"-1.1700000"},{"principal":"100","apr":"0.04","complete_days":"7","cancel_days":"7","cancel_rate":"0.25","avg_merchant_yield":"0.0550","card":"0.00","refund":"0.00","conversion":"0","disputes":"0.0000","gas":"0.05","ops":"0.10","total_cost":"0.1500","control_cost":"0.0000","incremental_result":"-0.0950"}]; }
+function sensitivityCsv() { return "principal,days,apr,gross_interest,cancel_shopper,cancel_merchant,all_in_result,incremental_result,break_even_incremental_apr,break_even_all_in_apr\n25,1,0,0.00,0.00,0.00,-1.5662500,-0.5125000,9.353125,28.5840625\n25,1,0.02,0.001369863013698630136986301370,0.00,0.00,-1.5662500,-0.5125000,9.353125,28.5840625\n25,1,0.04,0.002739726027397260273972602740,0.00,0.00,-1.5662500,-0.5125000,9.353125,28.5840625\n25,1,0.08,0.005479452054794520547945205479,0.00,0.00,-1.5662500,-0.5125000,9.353125,28.5840625\n25,7,0,0.00,0.00,0.00,-1.5662500,-0.5125000,1.336160714285714285714285714,4.0834375\n25,7,0.02,0.009589041095890410958904109589,0.00,0.00,-1.5662500,-0.5125000,1.336160714285714285714285714,4.0834375\n25,7,0.04,0.01917808219178082191780821918,0.01,0.00,-1.5587500,-0.5050000,1.336160714285714285714285714,4.0834375\n25,7,0.08,0.03835616438356164383561643836,0.02,0.01,-1.5412500,-0.4875000,1.336160714285714285714285714,4.0834375\n25,14,0,0.00,0.00,0.00,-1.5662500,-0.5125000,0.6680803571428571428571428571,2.04171875\n25,14,0.02,0.01917808219178082191780821918,0.01,0.00,-1.5587500,-0.5050000,0.6680803571428571428571428571,2.04171875\n25,14,0.04,0.03835616438356164383561643836,0.02,0.01,-1.5412500,-0.4875000,0.6680803571428571428571428571,2.04171875\n25,14,0.08,0.07671232876712328767123287671,0.06,0.01,-1.5112500,-0.4575000,0.6680803571428571428571428571,2.04171875\n25,30,0,0.00,0.00,0.00,-1.5662500,-0.5125000,0.3117708333333333333333333333,0.9528020833333333333333333333\n25,30,0.02,0.04109589041095890410958904110,0.03,0.01,-1.5337500,-0.4800000,0.3117708333333333333333333333,0.9528020833333333333333333333\n25,30,0.04,0.08219178082191780821917808219,0.06,0.02,-1.5012500,-0.4475000,0.3117708333333333333333333333,0.9528020833333333333333333333\n25,30,0.08,0.1643835616438356164383561644,0.13,0.03,-1.4387500,-0.3850000,0.3117708333333333333333333333,0.9528020833333333333333333333\n100,1,0,0.00,0.00,0.00,-4.2475000,-1.2250000,5.5890625,19.37921875\n100,1,0.02,0.005479452054794520547945205479,0.00,0.00,-4.2475000,-1.2250000,5.5890625,19.37921875\n100,1,0.04,0.01095890410958904109589041096,0.01,0.00,-4.2400000,-1.2175000,5.5890625,19.37921875\n100,1,0.08,0.02191780821917808219178082192,0.02,0.00,-4.2325000,-1.2100000,5.5890625,19.37921875\n100,7,0,0.00,0.00,0.00,-4.2475000,-1.2250000,0.7984375,2.768459821428571428571428571\n100,7,0.02,0.03835616438356164383561643836,0.02,0.01,-4.2225000,-1.2000000,0.7984375,2.768459821428571428571428571\n100,7,0.04,0.07671232876712328767123287671,0.06,0.01,-4.1925000,-1.1700000,0.7984375,2.768459821428571428571428571\n100,7,0.08,0.1534246575342465753424657534,0.12,0.03,-4.1275000,-1.1050000,0.7984375,2.768459821428571428571428571\n100,14,0,0.00,0.00,0.00,-4.2475000,-1.2250000,0.39921875,1.384229910714285714285714286\n100,14,0.02,0.07671232876712328767123287671,0.06,0.01,-4.1925000,-1.1700000,0.39921875,1.384229910714285714285714286\n100,14,0.04,0.1534246575342465753424657534,0.12,0.03,-4.1275000,-1.1050000,0.39921875,1.384229910714285714285714286\n100,14,0.08,0.3068493150684931506849315068,0.24,0.06,-4.0075000,-0.9850000,0.39921875,1.384229910714285714285714286\n100,30,0,0.00,0.00,0.00,-4.2475000,-1.2250000,0.1863020833333333333333333333,0.6459739583333333333333333333\n100,30,0.02,0.1643835616438356164383561644,0.13,0.03,-4.1200000,-1.0975000,0.1863020833333333333333333333,0.6459739583333333333333333333\n100,30,0.04,0.3287671232876712328767123288,0.26,0.06,-3.9925000,-0.9700000,0.1863020833333333333333333333,0.6459739583333333333333333333\n100,30,0.08,0.6575342465753424657534246575,0.52,0.13,-3.7275000,-0.7050000,0.1863020833333333333333333333,0.6459739583333333333333333333\n250,1,0,0.00,0.00,0.00,-9.6100000,-2.6500000,4.83625,17.53825\n250,1,0.02,0.01369863013698630136986301370,0.01,0.00,-9.6025000,-2.6425000,4.83625,17.53825\n250,1,0.04,0.02739726027397260273972602740,0.02,0.00,-9.5950000,-2.6350000,4.83625,17.53825\n250,1,0.08,0.05479452054794520547945205479,0.04,0.01,-9.5700000,-2.6100000,4.83625,17.53825\n250,7,0,0.00,0.00,0.00,-9.6100000,-2.6500000,0.6908928571428571428571428571,2.505464285714285714285714286\n250,7,0.02,0.09589041095890410958904109589,0.07,0.02,-9.5375000,-2.5775000,0.6908928571428571428571428571,2.505464285714285714285714286\n250,7,0.04,0.1917808219178082191780821918,0.15,0.04,-9.4575000,-2.4975000,0.6908928571428571428571428571,2.505464285714285714285714286\n250,7,0.08,0.3835616438356164383561643836,0.30,0.08,-9.3050000,-2.3450000,0.6908928571428571428571428571,2.505464285714285714285714286\n250,14,0,0.00,0.00,0.00,-9.6100000,-2.6500000,0.3454464285714285714285714286,1.252732142857142857142857143\n250,14,0.02,0.1917808219178082191780821918,0.15,0.04,-9.4575000,-2.4975000,0.3454464285714285714285714286,1.252732142857142857142857143\n250,14,0.04,0.3835616438356164383561643836,0.30,0.08,-9.3050000,-2.3450000,0.3454464285714285714285714286,1.252732142857142857142857143\n250,14,0.08,0.7671232876712328767123287671,0.61,0.15,-9.0025000,-2.0425000,0.3454464285714285714285714286,1.252732142857142857142857143\n250,30,0,0.00,0.00,0.00,-9.6100000,-2.6500000,0.1612083333333333333333333333,0.5846083333333333333333333333\n250,30,0.02,0.4109589041095890410958904110,0.33,0.08,-9.2825000,-2.3225000,0.1612083333333333333333333333,0.5846083333333333333333333333\n250,30,0.04,0.8219178082191780821917808219,0.66,0.16,-8.9550000,-1.9950000,0.1612083333333333333333333333,0.5846083333333333333333333333\n250,30,0.08,1.643835616438356164383561644,1.31,0.33,-8.2975000,-1.3375000,0.1612083333333333333333333333,0.5846083333333333333333333333\n1000,1,0,0.00,0.00,0.00,-36.4225000,-9.7750000,4.45984375,16.617765625\n1000,1,0.02,0.05479452054794520547945205479,0.04,0.01,-36.3825000,-9.7350000,4.45984375,16.617765625\n1000,1,0.04,0.1095890410958904109589041096,0.08,0.02,-36.3425000,-9.6950000,4.45984375,16.617765625\n1000,1,0.08,0.2191780821917808219178082192,0.17,0.04,-36.2550000,-9.6075000,4.45984375,16.617765625\n1000,7,0,0.00,0.00,0.00,-36.4225000,-9.7750000,0.6371205357142857142857142857,2.373966517857142857142857143\n1000,7,0.02,0.3835616438356164383561643836,0.30,0.08,-36.1175000,-9.4700000,0.6371205357142857142857142857,2.373966517857142857142857143\n1000,7,0.04,0.7671232876712328767123287671,0.61,0.15,-35.8150000,-9.1675000,0.6371205357142857142857142857,2.373966517857142857142857143\n1000,7,0.08,1.534246575342465753424657534,1.22,0.31,-35.1975000,-8.5500000,0.6371205357142857142857142857,2.373966517857142857142857143\n1000,14,0,0.00,0.00,0.00,-36.4225000,-9.7750000,0.3185602678571428571428571429,1.186983258928571428571428571\n1000,14,0.02,0.7671232876712328767123287671,0.61,0.15,-35.8150000,-9.1675000,0.3185602678571428571428571429,1.186983258928571428571428571\n1000,14,0.04,1.534246575342465753424657534,1.22,0.31,-35.1975000,-8.5500000,0.3185602678571428571428571429,1.186983258928571428571428571\n1000,14,0.08,3.068493150684931506849315068,2.45,0.61,-33.9750000,-7.3275000,0.3185602678571428571428571429,1.186983258928571428571428571\n1000,30,0,0.00,0.00,0.00,-36.4225000,-9.7750000,0.1486614583333333333333333333,0.5539255208333333333333333333\n1000,30,0.02,1.643835616438356164383561644,1.31,0.33,-35.1100000,-8.4625000,0.1486614583333333333333333333,0.5539255208333333333333333333\n1000,30,0.04,3.287671232876712328767123288,2.62,0.66,-33.7975000,-7.1500000,0.1486614583333333333333333333,0.5539255208333333333333333333\n1000,30,0.08,6.575342465753424657534246575,5.26,1.31,-31.1675000,-4.5200000,0.1486614583333333333333333333,0.5539255208333333333333333333\n"; }
 
-return { reportRows };
+return { reportRows, fundingComparison, sensitivityCsv };
 })();
 const demoModule2 = (() => {
-const { reportRows } = demoModule1;
+const { reportRows, fundingComparison, sensitivityCsv } = demoModule1;
 
 const catalog = reportRows();
 const windows = [1,7,14,30];
@@ -2088,21 +2186,44 @@ function statRows(series,sel) {
 function reportResults(b,d,a) {
   const {row:r,series,negative,total}=reportSummary(b,d,a);
   const label=principal(b)+' · '+d+' invested day'+(d===1?'':'s')+' · '+a+'% simple annual rate';
-  return '<div class="r-receipt"><div class="r-ticket-title"><span>Scenario receipt</span><small>'+label+'</small></div><div class="r-cell-grid">'+
-    receipt('Gross interest per hold',cash(r[3],4),'r-gross')+receipt('Shopper if canceled',cash(r[4]),'r-share')+receipt('Merchant if canceled',cash(r[5]),'r-merchant')+'</div>'+
+  return '<div class="r-receipt"><div class="r-ticket-title"><span>Card-funded scenario</span><small>'+label+'</small></div><div class="r-cell-grid">'+
+    receipt('Gross interest per hold',cash(r[3],4),'r-gross')+receipt('Shopper’s interest share if canceled',cash(r[4]),'r-share')+receipt('Merchant’s interest share if canceled',cash(r[5]),'r-merchant')+'</div>'+
     '<p class="r-caption">Cancellation splits whole cents 80/20, using the largest remainder and giving ties to the shopper. Sub-cent interest is not paid out. Principal is separate.</p></div>'+
     '<div class="r-analysis"><section class="r-bars"><span class="r-eyebrow">01 / Time</span><h2>What waiting adds</h2><p>Gross interest per hold, at '+principal(b)+' and '+a+'%. All bars start at zero and share one scale for this basket and rate.</p><div class="r-bars-list" aria-label="Gross interest by invested days">'+statRows(series,d)+'</div></section>'+
-    '<section class="r-net"><span class="r-eyebrow">02 / Trade-off</span><h2>What early capture costs</h2><strong class="r-big" data-net>'+cash(r[6],4)+'</strong><p>Modeled change in merchant and operator contribution per started intent versus charging only when a shopper buys. Negative means early capture does worse.</p><small>25% cancel; the merchant receives all completion yield. '+negative+' of '+total+' modeled scenarios are negative under these assumptions. Not an observed outcome.</small></section></div>';
+    '<section class="r-net"><span class="r-eyebrow">02 / Trade-off</span><h2>Contribution change per start</h2><strong class="r-big" data-net>'+cash(r[6],4)+'</strong><p>Modeled change in merchant and operator contribution per started intent versus charging only when a shopper buys. Negative means early capture does worse.</p><small>25% cancel. The merchant receives all completion yield. '+negative+' of '+total+' card-funded scenarios are negative under these assumptions. Not an observed outcome.</small></section></div>';
+}
+function fixedComparison() {
+  const [card, wallet] = fundingComparison();
+  const walletFees = ['card', 'conversion', 'refund', 'disputes'].reduce((sum, key) => sum + Number(wallet[key]), 0);
+  const lines = [
+    ['Merchant interest retained', 'avg_merchant_yield'],
+    ['Cost of charging upfront', 'total_cost'],
+    ['Ordinary completion cost deducted', 'control_cost'],
+    ['Contribution change per start', 'incremental_result']
+  ];
+  const rows = lines.map(([label, key]) => '<tr><th scope="row">' + label + '</th><td>' +
+    cash(card[key], 4) + '</td><td>' + cash(wallet[key], 4) + '</td></tr>').join('');
+  return '<section class="r-comparison"><span class="r-eyebrow">Fixed comparison</span>' +
+    '<h2>What changes with a funded wallet?</h2><p>Both cases assume a ' + principal(card.principal) +
+    ' equivalent basket, ' + card.complete_days + ' invested days, ' + (100 * Number(card.apr)) +
+    '% APR and ' + (100 * Number(card.cancel_rate)) + '% cancellations. Each figure is an average per started checkout.</p>' +
+    '<table><caption>Modeled amounts in SGD equivalents</caption><thead><tr><th scope="col">Per start</th>' +
+    '<th scope="col">Card</th><th scope="col">Funded wallet</th></tr></thead><tbody>' + rows + '</tbody></table>' +
+    '<p>The wallet starts funded. It assumes ' + cash(wallet.gas) + ' in network costs and ' + cash(wallet.ops) +
+    ' in operations per start. Card processing, conversion, extra refund fees and disputes together add ' + cash(walletFees) + '.</p>' +
+    '<p>For cards, charging only on completion already costs ' + cash(card.control_cost, 4) +
+    ' per start in processing and expected disputes. Subtract that ordinary cost from upfront cost before comparing it with retained interest. These are modeled outcomes.</p></section>';
 }
 function reportPage(b=100,d=7,a=4) {
-  return '<article class="r-page"><div class="r-cover"><div class="r-cover-inner"><div><span class="r-eyebrow">delayedbuy / field notes 01</span><h1>The price<br>of a <em>pause.</em></h1><p>A basket can stay on hold for a week. What can its interest cover? Follow a hypothetical card purchase from checkout to refund.</p><a href="#checkout" class="r-cover-link">Try the simulated checkout <span aria-hidden="true">↗</span></a></div>'+
-    '<figure class="r-figure" aria-label="Illustration: a seven-day pause between reserve and decide"><div class="r-poster"><span class="r-poster-top">WAIT STUDY / FIG. 01</span><svg viewBox="0 0 260 152" role="img" aria-label="Two connected circles represent reserving and deciding"><g fill="none" stroke="#663946" stroke-width="2">'+
-    '<circle cx="78" cy="76" r="58"/><circle cx="96" cy="76" r="58"/><circle cx="114" cy="76" r="58"/><circle cx="132" cy="76" r="58"/><circle cx="150" cy="76" r="58"/><circle cx="168" cy="76" r="58"/><circle cx="186" cy="76" r="58"/></g><path d="M38 76h178m-7-6 7 6-7 6" fill="none" stroke="#171e1b" stroke-width="3"/></svg><div class="r-endpoints"><span>Reserve</span><b>01 → 07</b><span>Decide</span></div></div><figcaption>Time is the variable, not a promised return.</figcaption></figure></div></div>'+
-    '<div class="r-body"><div class="r-controls-head"><div><span class="r-eyebrow">Interactive / 64 cases</span><h2>Build a scenario.</h2></div><p>All values are illustrative SGD equivalents. Change one assumption to see what moves.</p></div><div class="r-controls">'+
+  return '<article class="r-page"><div class="r-cover"><div class="r-cover-inner"><div><span class="r-eyebrow">Illustrated scenario model</span><h1>The price<br>of a <em>pause.</em></h1><p>What could a card payment earn during a hold? Change the basket, time and assumed rate. The separate checkout demo pays no interest.</p><button type="button" class="r-cover-link" data-explore-report>Explore the scenarios <span aria-hidden="true">↓</span></button></div>'+
+    '<figure class="r-figure" aria-label="Illustration: a seven-day pause between reserve and decide"><div class="r-poster"><span class="r-poster-top">S$100 · Assumed 4% annual rate</span><svg viewBox="0 0 260 152" aria-hidden="true" focusable="false"><g fill="none" stroke="#663946" stroke-width="2">'+
+    '<circle cx="78" cy="76" r="58"/><circle cx="96" cy="76" r="58"/><circle cx="114" cy="76" r="58"/><circle cx="132" cy="76" r="58"/><circle cx="150" cy="76" r="58"/><circle cx="168" cy="76" r="58"/><circle cx="186" cy="76" r="58"/></g><path d="M38 76h178m-7-6 7 6-7 6" fill="none" stroke="#171e1b" stroke-width="3"/></svg><div class="r-endpoints"><span>Reserve</span><b>7 days</b><span>Decide</span></div></div><figcaption>In this seven-day example, '+cash(selectRow(100,7,4)[3],4)+' accrues before the cancellation split.</figcaption></figure></div></div>'+
+    '<div class="r-body"><div class="r-controls-head"><div><span class="r-eyebrow">64 card-funded cases</span><h2>Build a scenario.</h2></div><p>All values are illustrative SGD equivalents. Change one assumption to see what moves.</p></div><div class="r-controls">'+
     '<label>Basket<select id="r-basket" data-report="basket">'+option([25,100,250,1000],b,principal)+'</select></label><label>Invested time<select id="r-days" data-report="days">'+option(windows,d,v=>v+' day'+(v===1?'':'s'))+'</select></label><label>Annual rate<select id="r-apr" data-report="apr">'+option([0,2,4,8],a,v=>v+'%')+'</select></label></div>'+
     '<div id="r-results" aria-live="polite" aria-atomic="true">'+reportResults(b,d,a)+'</div>'+
-    '<details class="r-method"><summary>Read the assumptions and limits</summary><p>Gross interest = principal × annual rate × invested days ÷ 365, without compounding. The comparison counts fees that completed purchases would already pay, and models extra costs of early capture. It assumes par redemption and stable exchange rates. It does not establish demand, bank posting times, legal permission, or executable lending rates.</p><p>The figures are generated from the published <code>economics/sensitivity.csv</code>, not calculated from a live price feed. No money is invested by this demo.</p></details>'+
-    '<section class="r-close"><span class="r-eyebrow">03 / A better experiment</span><h2>Try the pause without the prepayment.</h2><p>Compare saving an item for later with ordinary checkout. Measure two outcomes together: fewer regretted purchases and sales customers still want to keep. Neither outcome has been demonstrated here.</p><a href="#checkout">Return to the checkout simulation →</a></section></div></article>';
+    fixedComparison() +
+    '<details class="r-method"><summary>Read the assumptions and limits</summary><p>Gross interest = principal × annual rate × invested days ÷ 365, without compounding. It assumes par redemption and stable exchange rates. It does not establish demand, bank posting times, legal permission, or executable lending rates.</p><p><a download="sensitivity.csv" href="data:text/csv;charset=utf-8,'+encodeURIComponent(sensitivityCsv())+'">Download the 64 card-funded cases (CSV)</a>. APRs in the file are fractions (0.04 means 4%). Break-even APRs are continuous estimates before whole-cent settlement rounding. No money is invested by this demo.</p></details>'+
+    '<section class="r-close"><span class="r-eyebrow">03 / Next experiment</span><h2>Try the pause without the prepayment.</h2><p>Compare saving an item for later with ordinary checkout. Measure two outcomes together: fewer regretted purchases and sales customers still want to keep. Neither outcome has been demonstrated here.</p><a href="#checkout">Return to the checkout simulation →</a></section></div></article>';
 }
 
 return { reportSummary, reportResults, reportPage };
@@ -2166,6 +2287,7 @@ let state;
 let loadError = false;
 let busy = false;
 let railFilter = 'all';
+const waitingPeriods = [1, 2, 7];
 let checkout = { rail: 'card', days: 2 };
 let pending = null;
 let feedbackTimer;
@@ -2268,23 +2390,20 @@ function productFigure(link = false, rail = 'card') {
     money(rail, rails[rail].amount) + '</small>' + end + '</span></div></' + tag + '>';
 }
 function homePage() {
-  const steps = [
-    ['box', 'Reserve an item', 'Choose a demo payment method and how long you want to wait. The full price goes into the simulated hold.'],
-    ['hourglass', 'Give it time', 'The item stays reserved through your waiting period. You can change your mind and cancel at any point while it is on hold.'],
-    ['split', 'Make the call', 'Once the wait ends, complete the purchase to pay the demo merchant, or cancel to return the principal to its original source.']
-  ];
-  return '<section class="frame hero"><div class="hero-copy"><div class="eyebrow kicker">Delayed checkout</div>' +
-    '<h1>Reserve now.<br><em>Decide later.</em></h1>' +
-    '<p>Hold the item you want, give yourself time to think, then choose whether to buy it.</p>' +
-    '<div class="hero-buttons"><a class="btn orange" href="#checkout">Try demo checkout ' + icon('arrow', 18) + '</a>' +
-    '<a class="text-link" href="#how">How it works ' + icon('down', 15) + '</a></div>' +
-    '<div class="hero-note"><a class="text-link" href="#report">Explore the illustrated report →</a></div>' +
-    '<div class="hero-note">' + icon('lock', 14) + ' No sign-up. No real payments.</div></div>' +
-    productFigure(true) + '</section>' +
-    '<section class="how-section" id="how" tabindex="-1"><div class="frame"><div class="section-head"><h2>How it works</h2>' +
-    '<p>You stay in control of the final purchase.</p></div><div class="steps">' +
-    steps.map(([symbol, title, copy], i) => '<article class="step"><div class="step-top"><span class="step-icon">' + icon(symbol, 22) + '</span><span class="micro">Step 0' + (i + 1) + '</span></div><h3>' + title + '</h3><p>' + copy + '</p></article>').join('') +
-    '</div></div></section>' +
+  const options = waitingPeriods.map(days => '<option value="' + days + '"' + (checkout.days === days ? ' selected' : '') + '>' +
+    days + (days === 1 ? ' day' : ' days') + '</option>').join('');
+  return '<section class="frame hero"><div class="hero-copy"><div class="eyebrow kicker">Checkout simulation</div>' +
+    '<h1>Hold the lamp.<br><em>Decide later.</em></h1>' +
+    '<p>Reserve the Arc table lamp. Cancel for a full refund while it’s on hold, or buy it when your wait ends.</p>' +
+    '<div class="hero-setup"><label for="preview-days">Waiting period</label><div class="hero-buttons">' +
+    '<select id="preview-days">' + options + '</select><a class="btn orange" href="#checkout">Set up my hold ' + icon('arrow', 18) +
+    '</a></div></div><div class="hero-note">' + icon('lock', 14) + ' Demo funds only. No sign-up.</div></div>' +
+    productFigure(true, checkout.rail) + '</section>' +
+    '<section class="how-section" id="how" tabindex="-1"><div class="frame"><div class="section-head"><h2>Where the payment goes</h2>' +
+    '<a class="text-link" href="#report">Explore the illustrated report ' + icon('diagonal', 15) + '</a></div>' +
+    '<div class="hold-flow"><div class="flow-origin">' + icon('hourglass', 24) + '<div><h3>Order hold</h3><p>The full demo price stays here until you decide.</p></div></div>' +
+    '<ul class="flow-options"><li class="refund-path">' + icon('refund', 20) + '<div><h3>Cancel while held</h3><p>Full amount → original demo card or wallet</p></div></li>' +
+    '<li class="purchase-path">' + icon('check', 20) + '<div><h3>Buy after the wait</h3><p>Full amount → demo merchant</p></div></li></ul></div></div></section>' +
     '<section class="showcase"><div class="frame show-grid"><div><span class="kicker">Merchant view</span><h2>Follow the money.</h2><p>See each hold, completed purchase, and refund in the demo ledger.</p></div><a class="btn outline" href="#merchant">Open merchant view ' +
     icon('arrow', 17) + '</a></div></section>';
 }
@@ -2297,19 +2416,19 @@ function checkoutPage() {
   const selected = checkout.rail;
   const option = (rail, symbol, title) => '<label class="choice"><input type="radio" name="rail" value="' + rail + '"' + (rail === selected ? ' checked' : '') +
     '><span>' + icon(symbol, 17) + title + '<i class="pick"></i></span></label>';
-  const days = [1,2,7].map(n => '<label class="choice"><input type="radio" name="days" value="' + n + '"' +
+  const days = waitingPeriods.map(n => '<label class="choice"><input type="radio" name="days" value="' + n + '"' +
     (n === checkout.days ? ' checked' : '') + '><span>' + (n === 1 ? '1 day' : n + ' days') + '</span></label>').join('');
   return '<div class="frame workspace">' + backLink() + '<div class="kicker">Simulation / Checkout</div><h1>Reserve your item.</h1>' +
-    '<p class="intro">Choose a payment method and a waiting period. You make the final purchase decision later.</p>' +
+    '<p class="intro">Choose how to fund the demo hold and when the option to buy opens.</p>' +
     '<div class="checkout-grid" id="checkout-grid">' + productFigure(false, selected) +
     '<form class="checkout-form" id="checkout-form"><fieldset aria-describedby="rail-help"><legend>Payment method</legend><div class="choices">' +
     option('card', 'card', 'SGD card') + option('usdc', 'coin', 'USDC wallet') + '</div>' +
     '<p class="help" id="rail-help">' + checkoutTerms() + '</p></fieldset>' +
-    '<fieldset><legend>Waiting period</legend><div class="choices durations">' + days + '</div><p class="help">The timer opens the option to buy. It never completes a purchase automatically.</p></fieldset>' +
+    '<fieldset><legend>Waiting period</legend><div class="choices durations">' + days + '</div><p class="help">You can cancel throughout the hold. Buying requires your confirmation after the wait.</p></fieldset>' +
     '<div class="summary-lines"><div class="summary-line"><span>Earliest completion</span><strong id="checkout-unlock">' + showDate(state.now + checkout.days * DAY) + ' SGT</strong></div>' +
-    '<div class="summary-line"><span>Customer yield</span><strong>None</strong></div><div class="summary-line total"><span>Amount held</span><strong id="checkout-total">' + money(selected, rails[selected].amount) + '</strong></div></div>' +
-    '<button type="submit" class="btn orange full">Reserve item ' + icon('arrow', 17) + '</button>' +
-    '<p class="payment-note">' + icon('lock', 14) + ' Simulation only. Demo prices are set independently for each payment method.</p></form></div></div>';
+    '<div class="summary-line"><span>Interest on this hold</span><strong>None</strong></div><div class="summary-line total"><span>Amount held</span><strong id="checkout-total">' + money(selected, rails[selected].amount) + '</strong></div></div>' +
+    '<button type="submit" class="btn orange full">Create demo hold ' + icon('arrow', 17) + '</button>' +
+    '<p class="payment-note">' + icon('lock', 14) + ' Card and wallet use separate demo prices.</p></form></div></div>';
 }
 function clockPanel() {
   return '<section class="clock-panel" aria-label="Simulation clock"><div class="clock-label">' + icon('clock', 20) +
@@ -2340,8 +2459,9 @@ function orderDetails(order, missing) {
   const isOpen = order.status === 'holding';
   let actions = '';
   if (isOpen) {
-    const unlock = order.eligible ? '' : '<button data-action="unlock" class="plain-button">Advance to end of wait</button>';
-    const help = order.eligible ? 'Your waiting period has ended. Choose what happens to this hold.' : 'Completion opens ' + showDate(order.unlockAt) + ' SGT. You can cancel now.';
+    const unlock = order.eligible ? '' : '<button data-action="unlock" class="plain-button">Skip the remaining demo wait</button>';
+    const daysLeft = Math.max(0, Math.ceil((order.unlockAt - state.now) / DAY));
+    const help = order.eligible ? 'Your waiting period has ended. Choose what happens to this hold.' : daysLeft + (daysLeft === 1 ? ' day' : ' days') + ' left on the demo clock. You can cancel now.';
     actions = '<p class="action-help">' + help + '</p>' + unlock + '<div class="action-row"><button class="btn orange" data-action="complete"' +
       (order.eligible ? '' : ' disabled') + '>Complete purchase ' + icon('check', 16) + '</button><button class="btn outline" data-action="cancel">Cancel hold ' + icon('refund', 15) + '</button></div>';
   } else {
@@ -2367,9 +2487,11 @@ function balanceCard(rail, totals) {
   const amount = number => money(rail, number);
   const funded = totals.held + totals.completed + totals.refunded;
   return '<section class="balance-card ' + rail + '" data-totals="' + rail + '"><h2>' + icon(rail === 'card' ? 'card' : 'coin', 19) +
-    (rail === 'card' ? 'SGD card ledger' : 'USDC wallet ledger') + '</h2><div class="big">' + amount(totals.held) + '</div><p class="money-label">Currently held for customers</p>' +
-    '<div class="balance-mini"><div>Gross funded<b>' + amount(funded) + '</b></div><div>Paid to merchant<b>' +
-    amount(totals.completed) + '</b></div><div>Returned to source<b>' + amount(totals.refunded) + '</b></div></div></section>';
+    (rail === 'card' ? 'SGD card ledger' : 'USDC wallet ledger') + '</h2><div class="big">' + amount(totals.held) + '</div><p class="money-label held-key">Currently held for customers</p>' +
+    '<div class="balance-track" aria-hidden="true"><span class="held" style="flex-grow:' + totals.held + '"></span>' +
+    '<span class="paid" style="flex-grow:' + totals.completed + '"></span><span class="returned" style="flex-grow:' + totals.refunded + '"></span></div>' +
+    '<div class="balance-mini"><div>Gross funded<b>' + amount(funded) + '</b></div><div class="paid-key">Paid to merchant<b>' +
+    amount(totals.completed) + '</b></div><div class="returned-key">Returned to source<b>' + amount(totals.refunded) + '</b></div></div></section>';
 }
 function ledgerRows(view) {
   const entries = view.orders.flatMap(order => order.events.map((event, index) => ({ order, event, index })))
@@ -2415,7 +2537,14 @@ function closeMenu() {
   menuButton.setAttribute('aria-expanded', 'false');
   menuButton.setAttribute('aria-label', 'Open menu');
 }
-function onRouteChange(event) {
+function focusOrder() {
+  const detail = document.querySelector('#order-detail');
+  if (!detail) return;
+  detail.tabIndex = -1;
+  detail.focus({ preventScroll: true });
+  if (window.matchMedia('(max-width: 640px)').matches) detail.scrollIntoView({ block: 'start' });
+}
+function onRouteChange() {
   navigationEpoch++;
   pending = null;
   if (dialog.open) dialog.close();
@@ -2424,11 +2553,8 @@ function onRouteChange(event) {
   if (route().page === 'how' && !loadError) {
     document.querySelector('#how').focus({ preventScroll: true });
     document.querySelector('#how').scrollIntoView();
-  } else if (route().page === 'customer' && new URL(event.oldURL).hash.startsWith('#customer') && document.querySelector('#order-detail')) {
-    const detail = document.querySelector('#order-detail');
-    detail.tabIndex = -1;
-    detail.focus({ preventScroll: true });
-    if (window.matchMedia('(max-width: 640px)').matches) detail.scrollIntoView({ block: 'start' });
+  } else if (route().page === 'customer' && route().id && document.querySelector('#order-detail')) {
+    focusOrder();
   } else {
     window.scrollTo(0, 0);
     main.focus({ preventScroll: true });
@@ -2445,7 +2571,7 @@ function ask(action) {
     : isCancel ? ['Cancel this hold?', 'Return ' + amount + ' for ' + order.item + ' to the original ' + rails[order.rail].label.toLowerCase() + '.', 'Confirm cancellation']
     : ['Complete this purchase?', 'Release ' + amount + ' for ' + order.item + ' to the demo merchant and close this hold.', 'Confirm purchase'];
   pending = { action, id, opening: order?.events[0] };
-  dialog.innerHTML = '<div class="dialog-box"><div class="kicker">Simulation</div><h2 id="dialog-title">' + config[0] + '</h2><p>' + escapeHtml(config[1]) +
+  dialog.innerHTML = '<div class="dialog-box"><div class="kicker">Simulation</div><h2 id="dialog-title">' + config[0] + '</h2><p id="dialog-description">' + escapeHtml(config[1]) +
     '</p><div class="action-row"><button type="button" class="btn outline" data-dismiss autofocus>Go back</button><button type="button" class="btn orange" data-confirm>' + config[2] + '</button></div></div>';
   dialog.showModal();
 }
@@ -2498,6 +2624,10 @@ function showError(error) {
   announce(error?.name === 'QuotaExceededError' ? 'The browser has no room to save this change.' : (error?.message || 'The change could not be saved.'));
 }
 main.addEventListener('click', event => {
+  if (event.target.closest('[data-explore-report]')) {
+    document.querySelector('#r-basket').focus();
+    return;
+  }
   const select = event.target.closest('[data-select]');
   if (select) { location.hash = '#customer/' + select.dataset.select; return; }
   const button = event.target.closest('[data-action]');
@@ -2507,6 +2637,11 @@ main.addEventListener('click', event => {
   else if (['advance','unlock'].includes(action)) perform(action, document.querySelector('#order-detail')?.dataset.order);
 });
 main.addEventListener('change', event => {
+  if (event.target.id === 'preview-days') {
+    const days = Number(event.target.value);
+    if (waitingPeriods.includes(days)) checkout.days = days;
+    return;
+  }
   if (event.target.matches('select[data-report]')) {
     const values = {basket:[25,100,250,1000], days:[1,7,14,30], apr:[0,2,4,8]};
     const key = event.target.dataset.report, value = Number(event.target.value);
@@ -2571,7 +2706,13 @@ menuButton.addEventListener('click', () => {
   menuButton.setAttribute('aria-expanded', String(open));
   menuButton.setAttribute('aria-label', open ? 'Close menu' : 'Open menu');
 });
-menu.addEventListener('click', closeMenu);
+menu.addEventListener('click', event => {
+  closeMenu();
+  if (event.target.closest('a')?.hash === location.hash) main.focus({ preventScroll: true });
+});
+document.querySelector('.site-header').addEventListener('focusout', event => {
+  if (!event.currentTarget.contains(event.relatedTarget)) closeMenu();
+});
 document.querySelector('.skip').addEventListener('click', event => {
   event.preventDefault();
   main.focus({ preventScroll: true });
@@ -2592,6 +2733,7 @@ async function boot() {
   catch { loadError = true; }
   render();
   if (route().page === 'how') document.querySelector('#how')?.scrollIntoView();
+  if (route().page === 'customer' && route().id) focusOrder();
 }
 boot();
 
