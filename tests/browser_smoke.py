@@ -484,59 +484,6 @@ def reset_during_confirmation(page, base):
     return {'replacement_stayed_open': True, 'new_confirmation_closed_it_once': True}
 
 
-def review_viewports(browser):
-    """Capture this revision's synthetic screens on the runner for the branch review."""
-    import base64
-    import subprocess
-    import tempfile
-
-    with tempfile.TemporaryDirectory(prefix='delayedbuy-design-', dir='/tmp') as temporary:
-        checkout = Path(temporary) / 'checkout'
-        subprocess.run(['git', 'clone', '--quiet', '--no-hardlinks', str(ROOT), str(checkout)], check=True)
-        url = (checkout / 'docs' / 'index.html').as_uri()
-        for width, height in [(390, 844), (1280, 850)]:
-            context = browser.new_context(viewport={'width': width, 'height': height},
-                                          timezone_id='Asia/Singapore', device_scale_factor=1)
-            page = context.new_page()
-            for route in ('home', 'how', 'checkout', 'customer', 'selected', 'dialog', 'merchant', 'report', 'scenarios', 'comparison'):
-                target = {'selected': 'customer/ord_arc', 'dialog': 'customer/ord_arc', 'scenarios': 'report', 'comparison': 'report'}.get(route, route)
-                page.goto(url + '#' + target)
-                expect(page.locator('main h1')).to_be_visible()
-                expect(page.locator('main .boot')).to_have_count(0)
-                page.evaluate('() => Promise.all(Array.from(document.images, img => img.decode()))')
-                if route == 'how':
-                    page.locator('#how').evaluate("el => el.scrollIntoView()")
-                elif route == 'selected':
-                    expect(page.locator('#order-detail')).to_be_focused()
-                elif route == 'dialog':
-                    page.locator('[data-action=cancel]').click()
-                elif route in ('scenarios', 'comparison'):
-                    selector = '.r-controls-head' if route == 'scenarios' else '.r-comparison'
-                    page.locator(selector).evaluate("el => el.scrollIntoView()")
-                encoded = base64.b64encode(page.screenshot()).decode()
-                stamp = page.evaluate('''async ({encoded, width}) => {
-                  const img = new Image();
-                  img.src = 'data:image/png;base64,' + encoded;
-                  await img.decode();
-                  const canvas = document.createElement('canvas');
-                  canvas.width = Math.min(width, 960);
-                  canvas.height = Math.round(img.height * canvas.width / img.width);
-                  canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
-                  return canvas.toDataURL('image/webp', .68).split(',')[1];
-                }''', {'encoded': encoded, 'width': width})
-                for offset in range(0, len(stamp), 3000):
-                    print(f'VISUAL {width} {route} {offset} {stamp[offset:offset + 3000]}', flush=True)
-            context.close()
-            fallback = browser.new_context(viewport={'width': width, 'height': height}, java_script_enabled=False)
-            plain = fallback.new_page()
-            plain.goto(url)
-            expect(plain.locator('.boot-help p').first).to_be_visible()
-            data = base64.b64encode(plain.screenshot(type='jpeg', quality=63)).decode()
-            for offset in range(0, len(data), 3000):
-                print(f'FALLBACK {width} {offset} {data[offset:offset + 3000]}', flush=True)
-            fallback.close()
-
-
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--standalone', type=Path, help='Also exercise the downloaded single HTML file.')
@@ -551,7 +498,6 @@ def main():
     with static_site(standalone_path) as base, sync_playwright() as playwright:
         browser = playwright.chromium.launch(executable_path=executable, headless=True,
                 args=['--disable-background-networking', '--disable-component-update'])
-        review_viewports(browser)
         run = Run(browser, base)
         for rail in ('card', 'usdc'):
             for decision in ('cancel', 'complete'):
