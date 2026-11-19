@@ -50,7 +50,8 @@ function money(rail, units) {
 }
 function initialState() {
   const now = Date.now();
-  return { version: 1, now, ledger: demoLedger(now) };
+  // Sample order URLs survive a reset, but each new opening gets its own receipt.
+  return { version: 1, now, ledger: demoLedger(now, () => uniqueId('req_')) };
 }
 function findStorage() {
   // Without a cross-tab lock, keep each tab's simulation independent.
@@ -309,12 +310,12 @@ function ask(action) {
     ? ['Reset this demo?', 'This replaces the saved orders and simulation clock with the original examples.', 'Reset demo']
     : isCancel ? ['Cancel this hold?', 'Return ' + amount + ' for ' + order.item + ' to the original ' + rails[order.rail].label.toLowerCase() + '.', 'Confirm cancellation']
     : ['Complete this purchase?', 'Release ' + amount + ' for ' + order.item + ' to the demo merchant and close this hold.', 'Confirm purchase'];
-  pending = { action, id };
+  pending = { action, id, opening: order?.events[0] };
   dialog.innerHTML = '<div class="dialog-box"><div class="kicker">Simulation</div><h2 id="dialog-title">' + config[0] + '</h2><p id="dialog-description">' + escapeHtml(config[1]) +
     '</p><div class="action-row"><button type="button" class="btn outline" data-dismiss autofocus>Go back</button><button type="button" class="btn orange" data-confirm>' + config[2] + '</button></div></div>';
   dialog.showModal();
 }
-async function perform(action, id) {
+async function perform(action, id, opening) {
   if (busy) return;
   busy = true;
   try {
@@ -342,7 +343,15 @@ async function perform(action, id) {
       document.querySelector(action === 'advance' ? '[data-action="advance"]' : '[data-action="complete"]')?.focus({ preventScroll: true });
     } else {
       const requestId = uniqueId('req_');
-      await updateState(current => ({ ...current, ledger: applyAction(current.ledger, { type: action, requestId, orderId: id, at: current.now }) }));
+      await updateState(current => {
+        const hold = current.ledger.actions.find(entry => entry.type === 'hold' && entry.orderId === id);
+        if (!hold || hold.requestId !== opening.requestId || hold.at !== opening.at) {
+          state = current;
+          render();
+          throw new Error('This hold changed. Review the current order before confirming again.');
+        }
+        return { ...current, ledger: applyAction(current.ledger, { type: action, requestId, orderId: id, at: current.now }) };
+      });
       render();
       announce(action === 'cancel' ? 'Hold canceled. Principal returned to its original source.' : 'Purchase completed. Principal paid to the demo merchant.');
       const detail = document.querySelector('#order-detail');
@@ -425,10 +434,10 @@ main.addEventListener('submit', async event => {
 dialog.addEventListener('click', event => {
   if (event.target.closest('[data-dismiss]')) { pending = null; dialog.close(); return; }
   if (event.target.closest('[data-confirm]') && pending) {
-    const {action, id} = pending;
+    const {action, id, opening} = pending;
     pending = null;
     dialog.close();
-    perform(action, id);
+    perform(action, id, opening);
   }
 });
 dialog.addEventListener('close', () => { if (!dialog.open) pending = null; });

@@ -14,7 +14,7 @@ Alternatively, [download the single-file demo](https://github.com/EauDoon/Delaye
 
 ## The price of a pause
 
-Open **Report** from the top navigation or visit `/#report` on a local server. Pick a basket, invested time and annual rate to compare 64 checked scenarios. The charts distinguish gross interest, refundable principal, a cancellation reward and the modeled cost of prepayment. If deploying under a repository subpath, add `#report` to the repository’s Pages root URL instead.
+Open **Report** from the top navigation or visit `/#report` on a local server. Pick a basket, invested time and annual rate to compare 64 card-funded scenarios. A separate fixed example compares card funding with an already-funded wallet at S$100 equivalent, seven days and 4% simple APR. The charts distinguish gross interest, refundable principal, a cancellation reward and the modeled cost of prepayment. If deploying under a repository subpath, add `#report` to the repository’s Pages root URL instead.
 
 ## What's here
 
@@ -34,7 +34,7 @@ python3 tests/browser_smoke.py --standalone dist/delayedbuy-demo.html
 
 The browser suite needs Python Playwright plus Chromium. The app and other checks require no package installation beyond standard Node and Python runtimes. Site packaging expects a new or empty destination. Refreshing or clearing this browser’s storage affects only its demo state. Browser storage is not an authentication boundary or a settlement system.
 
-The offline report rows are regenerated from `economics/sensitivity.csv` and tested against all 64 original rows. Browser tests cover the report and the checkout, including Back navigation during a confirmation, keyboard focus restoration and a queued checkout that must not override later navigation.
+The offline report uses `economics/sensitivity.csv` for its 64 card cases and `economics/scenarios.csv` for the fixed funding comparison. The downloadable sensitivity CSV stores APRs as fractions (0.04 means 4%). Its break-even APRs are continuous estimates before whole-cent settlement rounding. Browser tests cover the report and the checkout, including Back navigation during a confirmation, keyboard focus restoration and a queued checkout that must not override later navigation.
 
 **Static hosting:** the prebuilt `docs/` directory contains only the standalone simulator and `.nojekyll`. To enable GitHub Pages, select **Settings → Pages → Deploy from a branch → main → /docs**. Publication of the source does not itself enable hosting.
 

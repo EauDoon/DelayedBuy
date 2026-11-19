@@ -1916,7 +1916,7 @@ dialog::backdrop {
 .r-net small{display:block;font-size:.8rem;border-top:1px solid #bf9486;padding-top:.7rem}
 .r-bars-list{display:grid;gap:9px;margin:20px 0 5px}
 .r-bar-row{display:grid;grid-template-columns:3ch 1fr 9ch;align-items:center;gap:10px;font:500 .8rem/1.4 var(--mono)}
-.r-bar-row strong{text-align:right;white-space:nowrap}.r-track i{height:10px;display:block;background:#52977f}.r-track{height:10px;background:#deded0;border-left:1px solid #32483d}
+.r-bar-row strong{text-align:right;white-space:nowrap}.r-track i{height:10px;display:block;background:#417761}.r-track{height:10px;background:#deded0;border-left:1px solid #32483d}
 .r-active .r-track i{background:#344d43}.r-active{font-weight:700}
 .r-method{border-block:1px solid var(--r-line);margin:25px 0}.r-method summary{cursor:pointer;padding:17px 0}.r-method p{max-width:72ch;font-size:.93rem}
 .r-close{background:#dce9c4;max-width:100%}.r-close p{max-width:70ch}.r-page a:focus-visible,.r-page summary:focus-visible,.r-page select:focus-visible{outline:3px solid #9361c0;outline-offset:3px}

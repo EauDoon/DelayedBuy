@@ -140,16 +140,16 @@ export function getView(ledger, nowMs = Date.now()) {
   return { orders, totals };
 }
 
-export function demoLedger(nowMs = Date.now()) {
+export function demoLedger(nowMs = Date.now(), requestIdFor = label => 'req_' + label) {
   checkClock(nowMs);
   requireThat(nowMs >= 4 * DAY && nowMs <= LAST_DATE - 2 * DAY, 'Demo time is out of range.');
   const actions = [
-    { type: 'hold', requestId: 'req_daypack_hold', orderId: 'ord_daypack', item: 'Canvas daypack',
+    { type: 'hold', requestId: requestIdFor('daypack_hold'), orderId: 'ord_daypack', item: 'Canvas daypack',
       rail: 'card', amount: 8_500, source: 'card_demo', at: nowMs - 4 * DAY, holdMs: 2 * DAY },
-    { type: 'hold', requestId: 'req_studio_hold', orderId: 'ord_studio', item: 'Studio headphones',
+    { type: 'hold', requestId: requestIdFor('studio_hold'), orderId: 'ord_studio', item: 'Studio headphones',
       rail: 'usdc', amount: 120_000_000, source: 'wallet_demo', at: nowMs - 3 * DAY, holdMs: 2 * DAY },
-    { type: 'complete', requestId: 'req_daypack_complete', orderId: 'ord_daypack', at: nowMs - DAY },
-    { type: 'hold', requestId: 'req_arc_hold', orderId: 'ord_arc', item: 'Arc table lamp',
+    { type: 'complete', requestId: requestIdFor('daypack_complete'), orderId: 'ord_daypack', at: nowMs - DAY },
+    { type: 'hold', requestId: requestIdFor('arc_hold'), orderId: 'ord_arc', item: 'Arc table lamp',
       rail: 'card', amount: 18_000, source: 'card_demo', at: nowMs - DAY, holdMs: 3 * DAY },
   ];
   return validateLedger({ version: 1, actions });

@@ -23,10 +23,11 @@ export function reportResults(b,d,a) {
     receipt('Gross interest per hold',cash(r[3],4),'r-gross')+receipt('Shopper’s interest share if canceled',cash(r[4]),'r-share')+receipt('Merchant’s interest share if canceled',cash(r[5]),'r-merchant')+'</div>'+
     '<p class="r-caption">Cancellation splits whole cents 80/20, using the largest remainder and giving ties to the shopper. Sub-cent interest is not paid out. Principal is separate.</p></div>'+
     '<div class="r-analysis"><section class="r-bars"><span class="r-eyebrow">01 / Time</span><h2>What waiting adds</h2><p>Gross interest per hold, at '+principal(b)+' and '+a+'%. All bars start at zero and share one scale for this basket and rate.</p><div class="r-bars-list" aria-label="Gross interest by invested days">'+statRows(series,d)+'</div></section>'+
-    '<section class="r-net"><span class="r-eyebrow">02 / Trade-off</span><h2>Cost of charging upfront</h2><strong class="r-big" data-net>'+cash(r[6],4)+'</strong><p>Modeled change in merchant and operator contribution per started intent versus charging only when a shopper buys. Negative means early capture does worse.</p><small>25% cancel. The merchant receives all completion yield. '+negative+' of '+total+' card-funded scenarios are negative under these assumptions. Not an observed outcome.</small></section></div>';
+    '<section class="r-net"><span class="r-eyebrow">02 / Trade-off</span><h2>Contribution change per start</h2><strong class="r-big" data-net>'+cash(r[6],4)+'</strong><p>Modeled change in merchant and operator contribution per started intent versus charging only when a shopper buys. Negative means early capture does worse.</p><small>25% cancel. The merchant receives all completion yield. '+negative+' of '+total+' card-funded scenarios are negative under these assumptions. Not an observed outcome.</small></section></div>';
 }
 function fixedComparison() {
   const [card, wallet] = fundingComparison();
+  const walletFees = ['card', 'conversion', 'refund', 'disputes'].reduce((sum, key) => sum + Number(wallet[key]), 0);
   const lines = [
     ['Merchant interest retained', 'avg_merchant_yield'],
     ['Cost of charging upfront', 'total_cost'],
@@ -42,7 +43,7 @@ function fixedComparison() {
     '<table><caption>Modeled amounts in SGD equivalents</caption><thead><tr><th scope="col">Per start</th>' +
     '<th scope="col">Card</th><th scope="col">Funded wallet</th></tr></thead><tbody>' + rows + '</tbody></table>' +
     '<p>The wallet starts funded. It assumes ' + cash(wallet.gas) + ' in network costs and ' + cash(wallet.ops) +
-    ' in operations per start, with zero card, conversion, extra refund or dispute costs. No ordinary completion cost is modeled for this wallet.</p>' +
+    ' in operations per start. Card processing, conversion, extra refund fees and disputes together add ' + cash(walletFees) + '.</p>' +
     '<p>For cards, charging only on completion already costs ' + cash(card.control_cost, 4) +
     ' per start in processing and expected disputes. Subtract that ordinary cost from upfront cost before comparing it with retained interest. These are modeled outcomes.</p></section>';
 }
