@@ -141,7 +141,7 @@ class Run:
             print(record['failure'], file=sys.stderr, flush=True)
 
 KEY = 'delayedbuy.sandbox.v1'
-ROUTES = ['home', 'how', 'checkout', 'customer', 'merchant']
+ROUTES = ['report', 'home', 'how', 'checkout', 'customer', 'merchant']
 
 
 def visit(page, base, route):
@@ -318,6 +318,61 @@ def corrupted_store(page, base):
             'confirmed_reset_recovers_sample_orders': 3, 'message': title}
 
 
+def report_interaction(page, base):
+    visit(page, base, 'home')
+    page.get_by_role('link', name='Explore the illustrated report').click()
+    expect(page.locator('.r-cover h1')).to_contain_text('pause.')
+    expect(page.locator('[data-net]')).to_have_text('−S$1.1700')
+    page.get_by_label('Annual rate').focus()
+    page.get_by_label('Annual rate').select_option('0')
+    expect(page.locator('.r-gross b')).to_have_text('S$0.0000')
+    expect(page.get_by_label('Annual rate')).to_be_focused()
+    page.get_by_label('Basket', exact=True).select_option('1000')
+    page.get_by_label('Invested time').select_option('30')
+    page.get_by_label('Annual rate').select_option('8')
+    expect(page.locator('.r-gross b')).to_have_text('S$6.5753')
+    expect(page.locator('.r-share b')).to_have_text('S$5.26')
+    expect(page.locator('.r-active')).to_contain_text('30d')
+    return {'default': '−S$1.1700', 'zero_rate': True, 'upper_case': 'S$6.5753'}
+
+
+def stale_confirmation(page, base):
+    snapshot = reserve(page, base, 'card')
+    page.locator('[data-action=cancel]').click()
+    expect(page.locator('dialog')).to_be_visible()
+    page.go_back()
+    expect(page.locator('#checkout-form')).to_be_visible()
+    expect(page.locator('dialog')).not_to_be_visible()
+    assert actions(stored(page)) == actions(snapshot)
+    return {'back_closed_dialog': True, 'ledger_unchanged': True}
+
+
+def reset_focus(page, base):
+    visit(page, base, 'merchant')
+    page.locator('[data-action=reset]').focus()
+    page.keyboard.press('Enter')
+    page.locator('[data-confirm]').click()
+    expect(page.locator('#main')).to_be_focused()
+    expect(page.locator('#rail-filter')).to_be_visible()
+    return {'workspace_focus_restored': True}
+
+
+def queued_checkout_navigation(page, base):
+    visit(page, base, 'checkout')
+    old_count = len(actions(stored(page)))
+    page.evaluate("() => { window.testLockHeld = false; navigator.locks.request('delayedbuy.sandbox.v1', () => new Promise(r => { window.testRelease = r; window.testLockHeld = true; })); }")
+    page.wait_for_function('window.testLockHeld === true')
+    page.locator('#checkout-form button[type=submit]').click()
+    page.locator('#primary-nav a[href="#merchant"]').click()
+    expect(page.locator('#rail-filter')).to_be_visible()
+    page.evaluate('() => window.testRelease()')
+    page.wait_for_function("([k, n]) => JSON.parse(localStorage.getItem(k)).ledger.actions.length === n+1", arg=[KEY,old_count])
+    expect(page.locator('#rail-filter')).to_be_visible()
+    assert page.url.endswith('#merchant')
+    expect(page.locator('[data-totals="card"] .big')).to_have_text('S$360.00')
+    return {'exactly_one_new_hold': True, 'newer_route_preserved': True}
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--standalone', type=Path, help='Also exercise the downloaded single HTML file.')
@@ -342,6 +397,10 @@ def main():
         for w, h in [(320, 740), (390, 844), (768, 1024), (1280, 850)]:
             run.case(f'Route fit, labels and checkout fields at {w}px', partial(viewport_check, screenshots=args.screenshots), w, h, w < 600)
         run.case('Mobile menu opens, navigates and closes', mobile_navigation, 390, 844, True)
+        run.case('Scenario report thresholds and accessible controls', report_interaction)
+        run.case('Back closes an obsolete confirmation', stale_confirmation)
+        run.case('Reset preserves meaningful keyboard focus', reset_focus)
+        run.case('Queued checkout respects newer navigation', queued_checkout_navigation)
         passed = sum(c['status'] == 'passed' for c in run.cases)
         report = {'executed_at_utc': datetime.now(timezone.utc).isoformat(),
                   'suite': 'Playwright local Chromium browser smoke checks', 'served_at': PREFIX,

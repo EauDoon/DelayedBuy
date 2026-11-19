@@ -1,0 +1,30 @@
+name: Simulator checks
+on:
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  simulator:
+    if: ${{ github.event.repository.private == false }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - name: Verify source, fixture and static bundles
+        run: |
+          node --test tests/*.test.mjs
+          python3 -m unittest discover -s economics -v
+          python3 scripts/build_report_data.py
+          git diff --exit-code -- ui/report-data.mjs
+          python3 scripts/package_demo.py --standalone dist/delayedbuy-demo.html --pages dist/site
+          cmp dist/delayedbuy-demo.html docs/index.html
+          cmp dist/delayedbuy-demo.html downloads/delayedbuy-demo.html
+      - name: Exercise local browser journeys
+        run: |
+          python3 -m venv "$RUNNER_TEMP/simulator-qa"
+          "$RUNNER_TEMP/simulator-qa/bin/pip" install -q playwright==1.62.0
+          export CHROMIUM_BIN="$(command -v google-chrome)"
+          "$RUNNER_TEMP/simulator-qa/bin/python" tests/browser_smoke.py --standalone dist/delayedbuy-demo.html || { cat evidence/browser-tests.json; exit 1; }
