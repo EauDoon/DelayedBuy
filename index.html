@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'none'; form-action 'none'; object-src 'none'; base-uri 'none'">
+  <meta name="theme-color" content="#faf8f2">
+  <meta name="description" content="Try delayedbuy, a simulated checkout that reserves an item and gives you time to decide.">
+  <title>delayedbuy · Reserve now. Decide later.</title>
+  <link rel="icon" type="image/svg+xml" href="./ui/assets/mark.svg">
+  <link rel="stylesheet" href="./ui/style.css">
+  <script type="module" src="./ui/app.js"></script>
+</head>
+<body>
+  <a class="skip" href="#main">Skip to content</a>
+  <header class="site-header">
+    <div class="nav-frame">
+      <a href="#home" class="brand" aria-label="delayedbuy home"><img src="./ui/assets/mark.svg" width="33" height="33" alt="">delayedbuy</a>
+      <nav id="primary-nav" aria-label="Primary">
+        <a href="#how">How it works</a>
+        <a href="#customer">Customer view</a>
+        <a href="#merchant">Merchant view</a>
+      </nav>
+      <div class="nav-end"><span class="sim-badge"><i></i> Simulation</span>
+        <button type="button" class="menu-button" aria-controls="primary-nav" aria-expanded="false" aria-label="Open menu"><span></span><span></span></button>
+      </div>
+    </div>
+  </header>
+  <main id="main" tabindex="-1">
+    <div class="frame boot"><span class="kicker">Simulated checkout</span><h1>Reserve now.<br><em>Decide later.</em></h1><p>Loading the demo…</p></div>
+  </main>
+  <div id="feedback" role="status" aria-live="polite" aria-atomic="true"></div>
+  <dialog id="confirm-dialog" aria-labelledby="dialog-title"></dialog>
+  <footer>
+    <div class="frame foot-grid">
+      <div><a href="#home" class="brand"><img src="./ui/assets/mark.svg" width="28" height="28" alt="">delayedbuy</a><p>A simulated checkout. No real funds move.</p></div>
+      <div class="foot-nav"><a href="#checkout">Try checkout</a><a href="#customer">Customer view</a><a href="#merchant">Merchant view</a></div>
+    </div>
+  </footer>
+  <noscript><p class="noscript">Enable JavaScript to use the checkout simulation and dashboards.</p></noscript>
+</body>
+</html>
