@@ -7,6 +7,7 @@ let opening;
 let database;
 let session;
 let memory;
+let memoryArchives = [];
 let channel;
 
 function notificationChannel() {
@@ -52,9 +53,32 @@ async function openStore() {
   }
 }
 
-function inspect(state, action) {
+function archiveRange() {
+  return IDBKeyRange.bound('archive:', 'archive:\uffff');
+}
+
+function sessionRecord(raw) {
+  const saved = raw == null ? null : JSON.parse(raw);
+  if (saved?.version === 2 && Array.isArray(saved.archives)) {
+    if (JSON.stringify(saved.state)?.length > 240_000) throw new Error('The saved reservation study is too large.');
+    return saved;
+  }
+  if (raw?.length > 240_000) throw new Error('The saved reservation study is too large.');
+  return { state: raw == null ? memory ?? createReservationState() : saved, archives: memoryArchives };
+}
+
+function inspect(state, action, archiveCount, restart) {
   const now = Date.now();
   const observed = observeReservationExpiry(state, now);
+  if (restart) {
+    const current = reservationView(observed, now).history;
+    if (!current.canRestart || restart.used !== current.used || restart.archiveCount !== archiveCount) {
+      throw new Error('The reservation rehearsal changed. Review it before starting again.');
+    }
+    const next = createReservationState();
+    return { next, archive: { archivedAt: now, state: observed },
+      view: { ...reservationView(next, now), archiveCount: archiveCount + 1 } };
+  }
   let next = observed;
   if (action !== undefined) {
     try { next = applyReservationAction(observed, action, now); }
@@ -64,10 +88,10 @@ function inspect(state, action) {
       return { next: observed, error };
     }
   }
-  return { next, view: reservationView(next, now) };
+  return { next, view: { ...reservationView(next, now), archiveCount } };
 }
 
-async function access(action) {
+async function openReservationStorage() {
   if (!opening) {
     opening = openStore().catch(error => {
       opening = undefined;
@@ -75,15 +99,22 @@ async function access(action) {
     });
   }
   await opening;
+}
+
+async function access(action, restart) {
+  await openReservationStorage();
   if (!database) {
-    const raw = session?.getItem(KEY);
-    // The model accepts at most 1,000 short events with IDs of up to 80 ASCII characters.
-    if (raw && raw.length > 240_000) throw new Error('The saved reservation study is too large.');
-    const state = raw == null ? memory ?? createReservationState() : JSON.parse(raw);
-    const { next, view, error } = inspect(state, action);
+    const { state, archives } = sessionRecord(session?.getItem(KEY));
+    const { next, view, error, archive } = inspect(state, action, archives.length, restart);
     if (next !== state) {
-      if (session) session.setItem(KEY, JSON.stringify(next));
-      else memory = next;
+      const savedArchives = archive ? [...archives, archive] : archives;
+      if (session) {
+        // Store both in one write: a quota error leaves the original study intact.
+        session.setItem(KEY, JSON.stringify(savedArchives.length ? { version: 2, state: next, archives: savedArchives } : next));
+      } else {
+        memory = next;
+        memoryArchives = savedArchives;
+      }
     }
     if (error) throw error;
     return view;
@@ -91,14 +122,17 @@ async function access(action) {
   return new Promise((resolve, reject) => {
     const transaction = database.transaction(STORE, 'readwrite');
     const store = transaction.objectStore(STORE);
+    const count = store.count(archiveRange());
     const read = store.openCursor(RECORD);
     let result, changed, failure;
     read.onsuccess = () => {
       try {
         // Compute time and availability here, after any other tab's writer has finished.
         const state = read.result ? read.result.value : createReservationState();
-        result = inspect(state, action);
+        result = inspect(state, action, count.result, restart);
         changed = result.next !== state;
+        // An archive and its replacement must commit together, including across tabs.
+        if (result.archive) store.add(result.archive, 'archive:' + String(count.result + 1).padStart(10, '0'));
         if (changed) store.put(result.next, RECORD);
       } catch (error) {
         failure = error;
@@ -116,6 +150,18 @@ async function access(action) {
 
 export function readReservation() { return access(); }
 export function changeReservation(action) { return access(action); }
+export function restartReservation(expected) { return access(undefined, expected); }
+
+export async function archivedReservations() {
+  await openReservationStorage();
+  if (!database) return sessionRecord(session?.getItem(KEY)).archives;
+  return new Promise((resolve, reject) => {
+    const transaction = database.transaction(STORE, 'readonly');
+    const read = transaction.objectStore(STORE).getAll(archiveRange());
+    transaction.onabort = () => reject(transaction.error);
+    transaction.oncomplete = () => resolve(read.result);
+  });
+}
 export function reservationStorageMode() { return database ? 'shared' : session ? 'session' : 'memory'; }
 
 export function subscribeReservation(refresh) {

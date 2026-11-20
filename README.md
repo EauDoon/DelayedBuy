@@ -15,6 +15,8 @@ Open the [24-hour reservation rehearsal](https://eaudoon.github.io/DelayedBuy/#r
 
 The results show how many accepted reservations ended in a return visit and how long the one unit was allocated. The request history distinguishes pending requests, declines, withdrawals, cancellations, merchant releases and expiries. These scripted outcomes provide no estimate of real demand. A live pilot would need two merchants to confirm a specific item and these terms.
 
+A rehearsal holds at most 1,000 events and reserves room to finish open requests. If another request no longer fits, finish the open requests, then use **Start a new rehearsal** and confirm. This archives the previous reservation history and starts with the original S$180 offer and no clock adjustment. **Download archived histories (JSON)** exports all prior rehearsals. Archives use the same storage as the reservation demo (browser, tab, or memory) and do not touch demo-funded checkout. If storage cannot keep the archive, the current rehearsal is retained.
+
 The browser suite below writes the rehearsal evidence to `evidence/browser-tests.json`. The five-request script exercises three acceptances, one shopper return, one cancellation and one merchant release, with one hour of total unit-time. Two other scripts race two merchant tabs for the last unit and leave an accepted request unanswered through its deadline. The expired reservation accounts for exactly 24 hours, even after a later reload.
 
 ## Try the separate demo-funded checkout

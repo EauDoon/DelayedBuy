@@ -1,4 +1,4 @@
-import { readReservation, changeReservation, subscribeReservation, reservationStorageMode } from './reservation-store.mjs';
+import { readReservation, changeReservation, restartReservation, archivedReservations, subscribeReservation, reservationStorageMode } from './reservation-store.mjs';
 import { icon } from './icons.js';
 
 const sgt = new Intl.DateTimeFormat('en-GB', {
@@ -55,7 +55,7 @@ function shopperCard(shopper, view) {
       '<div class="action-row">' + decisionButton('return', 'Record shopper return', request) + decisionButton('cancel', 'Cancel reservation', request) + '</div>';
   } else {
     actions = '<button type="button" class="btn outline" id="res-request-' + shopper + '" data-res-action="request" data-shopper="' +
-      shopper + '" data-price="' + view.priceCents + '">Request as Shopper ' + shopper + '</button>';
+      shopper + '" data-price="' + view.priceCents + '"' + (view.history.canRequest ? '' : ' disabled') + '>Request as Shopper ' + shopper + '</button>';
   }
   return '<article class="res-card"' + (request ? ' data-request-id="' + request.id + '" data-status="' + request.status + '"' : '') +
     '><div class="res-card-head"><h3 tabindex="-1" id="res-shopper-' + shopper + '">Shopper ' + shopper + '</h3>' + (request ? badge(request) : '') + '</div>' +
@@ -95,6 +95,30 @@ function evidence(view) {
     '<th scope="col">Requested · SGT</th><th scope="col">Requested price</th><th scope="col">Outcome</th><th scope="col">Unit-time</th></tr></thead><tbody>' +
     rows + '</tbody></table></div></details>' : '') + '</section>';
 }
+function historyControls(view, persistence) {
+  if (view.history.canRequest && !view.archiveCount) return '';
+  const unavailable = view.history.canRequest ? '' :
+    '<p>No room for another request in this rehearsal (' + view.history.used + ' of ' + view.history.limit +
+    ' events recorded; space is also reserved to close open requests).</p>' +
+    (view.history.canRestart ? '<p>Start again with a fresh offer and clock. Your prior reservation history stays in an archive' +
+      (persistence === 'memory' ? ' until you reload or close this page' : '') + '.</p>' +
+      '<button type="button" class="btn outline" id="res-restart" data-res-action="restart">Start a new rehearsal</button>' :
+      '<p>Finish the open requests or reservations before you can start again.</p>');
+  return '<section class="panel res-evidence" aria-labelledby="res-history-title"><h2 id="res-history-title" tabindex="-1">Rehearsal history</h2>' +
+    unavailable + (view.archiveCount ? '<p>Archived rehearsals: ' + view.archiveCount + '.</p>' +
+      '<button type="button" class="btn outline" id="res-export" data-res-action="archive">Download archived histories (JSON)</button>' : '') + '</section>';
+}
+
+async function downloadArchives() {
+  const archives = await archivedReservations();
+  const url = URL.createObjectURL(new Blob([JSON.stringify({ version: 1, archives }, null, 2) + '\n'], { type: 'application/json' }));
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = 'delayedbuy-reservation-archives.json';
+  link.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
 function workspace(view) {
   const open = view.requests.filter(request => request.status === 'pending' || request.status === 'active');
   const persistence = reservationStorageMode();
@@ -103,8 +127,10 @@ function workspace(view) {
     '<p class="intro">Play the demo merchant and two shoppers reserving one fictional lamp. This rehearsal creates no real merchant agreement.</p></div>' +
     '<section class="clock-panel res-clock" aria-label="Reservation clock"><div class="clock-label">' + icon('clock', 20) +
     '<div><strong>Reservation clock</strong>' + timeTag(view.now, 'data-res-clock') + '</div></div><div class="res-clock-buttons">' +
-    '<button type="button" id="res-advance-1" data-res-action="advance" data-hours="1">+1 hour</button>' +
-    '<button type="button" id="res-advance-24" data-res-action="advance" data-hours="24">+24 hours</button></div></section></div>' +
+    [1, 24].map(hours => '<button type="button" id="res-advance-' + hours + '" data-res-action="advance" data-hours="' +
+      hours + '"' + (view.history.advanceHours.includes(hours) ? '' : ' disabled') + '>+' + hours +
+      (hours === 1 ? ' hour' : ' hours') + '</button>').join('') + '</div></section></div>' +
+    historyControls(view, persistence) +
     '<section class="res-offer" aria-labelledby="res-offer-title"><img alt="Vermilion Arc table lamp" src="./ui/assets/arc-lamp.webp" width="1254" height="1254">' +
     '<div><h2 id="res-offer-title">Arc table lamp</h2><div class="res-offer-line"><strong data-res-offer>' + money(view.priceCents) +
     '</strong><span data-res-available>' + view.available + ' of 1 available</span></div>' +
@@ -115,7 +141,8 @@ function workspace(view) {
     '<h2 id="res-shopper-title" tabindex="-1">Shopper requests</h2><p>Choose a shopper to submit a request at the current offer. You can withdraw it before acceptance.</p>' +
     shopperCard('A', view) + shopperCard('B', view) + '</section>' +
     '<section id="reservation-merchant" class="panel" aria-labelledby="res-merchant-title"><h2 id="res-merchant-title" tabindex="-1">Merchant review</h2>' +
-    '<label class="res-price-control" for="res-price">Price for new requests<select id="res-price" data-res-action="price">' +
+    '<label class="res-price-control" for="res-price">Price for new requests<select id="res-price" data-res-action="price"' +
+    (view.history.canReprice ? '' : ' disabled') + '>' +
     [18000, 20000].map(price => '<option value="' + price + '"' + (view.priceCents === price ? ' selected' : '') + '>' + money(price) + '</option>').join('') +
     '</select></label><p>Accept or decline each pending request. Changing the offer preserves the fixed price of an accepted reservation.</p>' +
     (open.length ? [...open].reverse().map(request => reviewCard(request, view)).join('') : '<p class="res-empty">No requests to review.</p>') +
@@ -126,7 +153,8 @@ const messages = {
   request: 'Request sent for merchant review. No unit is held yet.', accept: 'Reservation accepted. One unit is held for 24 hours.',
   decline: 'Request declined.', withdraw: 'Request withdrawn.', cancel: 'Reservation cancelled. The unit is available.',
   release: 'The merchant released the unit.', return: 'Shopper return recorded. The unit is available. No sale was recorded.',
-  advance: 'Reservation clock advanced.', price: 'Offer price updated for new requests.'
+  advance: 'Reservation clock advanced.', price: 'Offer price updated for new requests.',
+  restart: 'New reservation rehearsal started. The previous history was archived.'
 };
 
 export function mountReservation(main, announce) {
@@ -134,11 +162,12 @@ export function mountReservation(main, announce) {
   root.className = 'frame workspace reservation-page';
   main.replaceChildren(root);
   root.innerHTML = '<h1>Request a reservation.</h1><p role="status">Opening the reservation rehearsal…</p>';
-  let attached = true, writing = false, needsRefresh = false, sequence = 0, timer, signature;
+  let attached = true, writing = false, needsRefresh = false, sequence = 0, timer, signature, displayed;
   const current = () => attached && root.isConnected && location.hash.slice(1).split('/')[0] === 'reservation';
 
   function show(view) {
-    const nextSignature = JSON.stringify([view.priceCents, view.available, view.requests]);
+    displayed = view;
+    const nextSignature = JSON.stringify([view.priceCents, view.available, view.requests, view.history, view.archiveCount]);
     if (nextSignature !== signature) {
       const focus = root.contains(document.activeElement) ? document.activeElement : null;
       const fallback = focus?.closest('.res-card')?.querySelector('h3')?.id ?? focus?.closest('section')?.querySelector('h2')?.id;
@@ -192,25 +221,34 @@ export function mountReservation(main, announce) {
     const type = control.dataset.resAction;
     if ((type === 'price') !== (event.type === 'change')) return;
     if (type === 'retry') { refresh(); return; }
+    if (type === 'archive') {
+      try { await downloadArchives(); }
+      catch { if (current()) announce('The archived reservation histories could not be downloaded.'); }
+      return;
+    }
+    if (type === 'restart' && (!displayed?.history.canRestart ||
+        !window.confirm('Archive this reservation history and start a new rehearsal? The funded checkout will not change.'))) return;
     let action;
     if (type === 'request') {
       const id = Array.from(crypto.getRandomValues(new Uint32Array(4)), n => n.toString(16).padStart(8, '0')).join('');
       action = { type, id, shopper: control.dataset.shopper, priceCents: Number(control.dataset.price) };
     } else if (type === 'price') action = { type, priceCents: Number(control.value) };
     else if (type === 'advance') action = { type, hours: Number(control.dataset.hours) };
-    else action = { type, id: control.dataset.requestId };
+    else if (type !== 'restart') action = { type, id: control.dataset.requestId };
     writing = true;
     root.setAttribute('aria-busy', 'true');
     sequence++;
     try {
-      const view = await changeReservation(action);
+      const view = type === 'restart' ? await restartReservation({ used: displayed.history.used, archiveCount: displayed.archiveCount }) :
+        await changeReservation(action);
       if (current()) { show(view); announce(messages[type]); }
     } catch (error) {
       if (current()) {
         // Re-render even when the model stayed the same, to restore a rejected price selection.
         signature = undefined;
         needsRefresh = true;
-        announce(error.message || 'The reservation could not be updated.');
+        announce(error.name === 'QuotaExceededError' && type === 'restart' ? 'There is not enough browser storage to archive this rehearsal. Your current history was kept.' :
+          error.message || 'The reservation could not be updated.');
       }
     } finally {
       writing = false;

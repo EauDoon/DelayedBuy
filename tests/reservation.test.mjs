@@ -165,3 +165,22 @@ test('a full study preserves room to accept and close each pending request', () 
   assert.equal(full.events.length, 1_000);
   assert.equal(view(full).available, 1);
 });
+
+test('history warns before a new request cannot fit while allowing its reserved closeout', () => {
+  const events = Array.from({ length: 997 }, () => ({ type: 'price', priceCents: 18_000, at: start }));
+  let state = { version: 1, offsetMs: 0, events };
+  assert.equal(view(state).history.canRequest, true);
+  state = apply(state, request('last'));
+  assert.deepEqual(view(state).history, {
+    used: 998, limit: 1000, canRequest: false, canReprice: false, advanceHours: [], canRestart: false,
+  });
+  assert.throws(() => apply(state, request('late', 'B')), /history is full/);
+  state = apply(state, { type: 'accept', id: 'last' });
+  assert.deepEqual(view(state).history.advanceHours, [24]);
+  assert.equal(view(state).history.canRestart, false);
+  state = apply(state, { type: 'release', id: 'last' });
+  assert.deepEqual(view(state).history, {
+    used: 1000, limit: 1000, canRequest: false, canReprice: false, advanceHours: [], canRestart: true,
+  });
+  assert.throws(() => apply(state, { type: 'price', priceCents: 20_000 }), /history is full/);
+});

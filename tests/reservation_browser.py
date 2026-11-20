@@ -1,5 +1,6 @@
 """Chromium journeys for the separate synthetic, one-unit reservation rehearsal."""
 from datetime import datetime, timezone
+import json
 
 from playwright.sync_api import expect
 
@@ -78,7 +79,7 @@ def reservation_record(page, replacement=None):
 
 def check_no_funded_workspace(page):
     observed = page.evaluate("""async key => ({
-        funded_db: (await indexedDB.databases()).some(db => db.name === key),
+        funded_db: !!window.indexedDB && (await indexedDB.databases()).some(db => db.name === key),
         local_save: localStorage.getItem(key), session_save: sessionStorage.getItem(key),
     })""", 'delayedbuy.sandbox.v1')
     assert observed == {'funded_db': False, 'local_save': None, 'session_save': None}, observed
@@ -233,3 +234,50 @@ def reservation_recovery(page, base):
     expect(page.locator('.order-list .order-btn')).to_have_count(3)
     assert reservation_record(page) == damaged
     return {'transient_open_retried_in_place': True, 'damaged_record_preserved': True, 'funded_view_available': True}
+
+
+def reservation_history_restart(page, base, funded_raw=None, session=False):
+    funded = funded_raw(page) if funded_raw else None
+    page.clock.set_fixed_time(START)
+    enter(page, base)
+    key = 'delayedbuy.reservation.v1'
+    at = int(START.timestamp() * 1000)
+    capped = {'version': 1, 'offsetMs': 3_600_000,
+              'events': [{'type': 'price', 'priceCents': 20000, 'at': at}] * 999
+                        + [{'type': 'advance', 'hours': 1, 'at': at}]}
+    if session:
+        page.evaluate('([key, record]) => sessionStorage.setItem(key, JSON.stringify(record))', [key, capped])
+        current = lambda: page.evaluate('key => JSON.parse(sessionStorage.getItem(key))', key)
+    else:
+        reservation_record(page, capped)
+        current = lambda: reservation_record(page)
+    page.reload(wait_until='load')
+    expect(page.get_by_text('No room for another request', exact=False)).to_be_visible()
+    expect(page.get_by_role('button', name='Request as Shopper A')).to_be_disabled()
+    expect(page.get_by_role('button', name='+24 hours')).to_be_disabled()
+    expect(page.get_by_label('Price for new requests')).to_be_disabled()
+    restart = page.get_by_role('button', name='Start a new rehearsal')
+    page.once('dialog', lambda dialog: dialog.dismiss())
+    restart.click()
+    assert current() == capped, 'Cancelled restart changed the saved rehearsal'
+    page.once('dialog', lambda dialog: dialog.accept())
+    restart.click()
+    expect(page.get_by_role('button', name='Request as Shopper A')).to_be_enabled()
+    expect(page.locator('[data-res-offer]')).to_have_text('S$180.00')
+    expect(page.get_by_text('Archived rehearsals: 1.')).to_be_visible()
+    output = current()
+    assert (output['state'] if session else output) == {'version': 1, 'offsetMs': 0, 'events': []}
+    if session:
+        assert output['archives'][0]['state'] == capped
+    page.reload(wait_until='load')
+    with page.expect_download() as download:
+        page.get_by_role('button', name='Download archived histories (JSON)').click()
+    data = json.loads(download.value.path().read_text(encoding='utf-8'))
+    assert [archive['state'] for archive in data['archives']] == [capped]
+    request(page, 'A')
+    if funded_raw:
+        assert funded_raw(page) == funded, 'Restart changed the demo-funded ledger'
+    else:
+        check_no_funded_workspace(page)
+    return {'old_events': len(capped['events']), 'old_history_exported': True, 'new_request_succeeded': True,
+            'funded_ledger': 'unchanged' if funded_raw else 'never created', 'storage': 'session' if session else 'shared'}

@@ -107,10 +107,14 @@ function applyCommand(study, action) {
 }
 
 // Keep enough space for all pending requests to be accepted and for each allocation to close.
+function availableEvents(study, count) {
+  let reserved = 0;
+  for (const request of study.outstanding.values()) reserved += request.status === 'pending' ? 2 : 1;
+  return EVENT_LIMIT - count - reserved;
+}
+
 function checkCapacity(study, count) {
-  let remaining = 0;
-  for (const request of study.outstanding.values()) remaining += request.status === 'pending' ? 2 : 1;
-  requireValid(count + remaining <= EVENT_LIMIT, 'Reservation study history is full.');
+  requireValid(availableEvents(study, count) >= 0, 'Reservation study history is full.');
 }
 
 function replay(state) {
@@ -178,5 +182,13 @@ export function reservationView(state, wallNow = Date.now()) {
     }
     if (Object.hasOwn(terminalCounts, request.status)) metrics[terminalCounts[request.status]]++;
   }
-  return { now: study.now, priceCents: study.priceCents, available: study.active ? 0 : 1, requests, metrics };
+  const used = state.events.length;
+  const free = availableEvents(study, used);
+  const history = {
+    used, limit: EVENT_LIMIT, canRequest: free >= 3, canReprice: free >= 1,
+    advanceHours: [1, 24].filter(hours => free >= 1 ||
+      (study.active && study.now + hours * HOUR >= study.active.expiresAt)),
+    canRestart: free < 3 && study.outstanding.size === 0,
+  };
+  return { now: study.now, priceCents: study.priceCents, available: study.active ? 0 : 1, requests, metrics, history };
 }
