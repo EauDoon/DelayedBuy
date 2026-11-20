@@ -21,7 +21,8 @@ from urllib.parse import unquote, urlsplit
 from zoneinfo import ZoneInfo
 
 from playwright.sync_api import expect, sync_playwright
-from reservation_browser import FAIL_FIRST_OPEN, reservation_journey, reservation_keyboard, reservation_recovery
+from reservation_browser import (FAIL_FIRST_OPEN, reservation_history_restart, reservation_journey,
+                                 reservation_keyboard, reservation_recovery)
 from reservation_concurrency import reservation_expiry, reservation_race
 
 
@@ -772,6 +773,11 @@ def main():
                  320, 740, True, start_route='reservation')
         run.case('Reservation retries a failed open and preserves a damaged record', reservation_recovery,
                  init_script=FAIL_FIRST_OPEN, start_route='reservation')
+        run.case('Full reservation history restarts only with confirmation and preserves funded checkout',
+                 partial(reservation_history_restart, funded_raw=saved_raw))
+        run.case('Archived reservation history survives a session-only restart',
+                 partial(reservation_history_restart, session=True),
+                 init_script="Object.defineProperty(window, 'indexedDB', {value: undefined})", start_route='reservation')
         passed = sum(c['status'] == 'passed' for c in run.cases)
         report = {'executed_at_utc': datetime.now(timezone.utc).isoformat(),
                   'suite': 'Playwright local Chromium browser smoke checks', 'served_at': PREFIX,
