@@ -21,6 +21,8 @@ from urllib.parse import unquote, urlsplit
 from zoneinfo import ZoneInfo
 
 from playwright.sync_api import expect, sync_playwright
+from reservation_browser import FAIL_FIRST_OPEN, reservation_journey, reservation_keyboard, reservation_recovery
+from reservation_concurrency import reservation_expiry, reservation_race
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -60,7 +62,7 @@ def static_site(standalone_file=None):
 
 def build_hashes():
     files = [ROOT / 'index.html', *sorted((ROOT / 'core').rglob('*.mjs')),
-             *sorted(p for p in (ROOT / 'ui').rglob('*') if p.is_file()), Path(__file__)]
+             *sorted(p for p in (ROOT / 'ui').rglob('*') if p.is_file()), *sorted((ROOT / 'tests').glob('*.py'))]
     return {str(p.relative_to(ROOT)): hashlib.sha256(p.read_bytes()).hexdigest() for p in files}
 
 
@@ -72,7 +74,8 @@ class Run:
         self.attempts = []
         self.local_paths = set()
 
-    def case(self, name, fn, width=1280, height=850, mobile=False, javascript=True, legacy_raw=None, init_script=None):
+    def case(self, name, fn, width=1280, height=850, mobile=False, javascript=True, legacy_raw=None,
+             init_script=None, start_route=None):
         record = {'case': name, 'viewport': [width, height], 'status': 'failed'}
         before = time.monotonic()
         alerts = []
@@ -124,13 +127,15 @@ class Run:
 
         context.route('**/*', permit_local)
         context.route_web_socket('**/*', websocket)
+        def observe(tab):
+            tab.on('pageerror', lambda e: alerts.append(f'Uncaught JS: {e}'))
+            tab.on('console', lambda m: alerts.append(f'{m.type}: {m.text}') if m.type == 'error' else None)
+            tab.on('response', lambda r: alerts.append(f'HTTP {r.status}: {r.url}') if r.status >= 400 else None)
+            tab.on('popup', lambda p: alerts.append(f'Unexpected popup {p.url}'))
+        context.on('page', observe)
         page = context.new_page()
-        page.on('pageerror', lambda e: alerts.append(f'Uncaught JS: {e}'))
-        page.on('console', lambda m: alerts.append(f'{m.type}: {m.text}') if m.type == 'error' else None)
-        page.on('response', lambda r: alerts.append(f'HTTP {r.status}: {r.url}') if r.status >= 400 else None)
-        page.on('popup', lambda p: alerts.append(f'Unexpected popup {p.url}'))
         try:
-            page.goto(self.url, wait_until='networkidle')
+            page.goto(self.url + ('#' + start_route if start_route else ''), wait_until='networkidle')
             record['observed'] = fn(page, self.url)
             if javascript:
                 assert page.evaluate('window.__paymentAttempts') == [], 'A real payment API was invoked'
@@ -151,7 +156,7 @@ class Run:
             print(record['failure'], file=sys.stderr, flush=True)
 
 KEY = 'delayedbuy.sandbox.v1'
-ROUTES = ['report', 'home', 'how', 'checkout', 'customer', 'merchant']
+ROUTES = ['report', 'home', 'how', 'checkout', 'customer', 'merchant', 'reservation']
 DAY_MS = 86_400_000
 
 
@@ -760,6 +765,13 @@ def main():
         run.case('Queued checkout respects newer navigation', queued_checkout_navigation)
         run.case('Queued checkout requires review if another tab changes the clock', clock_change_during_checkout)
         run.case('Another tab resets a hold before its queued confirmation', reset_during_confirmation)
+        run.case('Reservation lifecycle preserves an existing funded ledger', partial(reservation_journey, funded_raw=saved_raw))
+        run.case('Reservation expires exactly 24 hours after acceptance', reservation_expiry, start_route='reservation')
+        run.case('Two merchant tabs can reserve the last unit only once', reservation_race, start_route='reservation')
+        run.case('Keyboard reservation request and cancellation at 320px', reservation_keyboard,
+                 320, 740, True, start_route='reservation')
+        run.case('Reservation retries a failed open and preserves a damaged record', reservation_recovery,
+                 init_script=FAIL_FIRST_OPEN, start_route='reservation')
         passed = sum(c['status'] == 'passed' for c in run.cases)
         report = {'executed_at_utc': datetime.now(timezone.utc).isoformat(),
                   'suite': 'Playwright local Chromium browser smoke checks', 'served_at': PREFIX,
@@ -770,25 +782,29 @@ def main():
         if standalone_path:
             file_mode = Run(browser, standalone_path.as_uri())
             file_mode.case('Standalone HTML opened directly as file://', standalone_check)
+            file_mode.case('Standalone file reservation lifecycle', reservation_journey, start_route='reservation')
             loopback = Run(browser, base + 'delayedbuy-demo.html')
             loopback.case('Identical standalone HTML served alone on loopback', standalone_check)
             loopback.case('Standalone hold with browser storage unavailable', standalone_without_storage)
             loopback.case('Standalone explanation without JavaScript', no_script_explanation, javascript=False)
             loopback.case('Standalone scenario shortcut and offline CSV', report_shortcut)
+            loopback.case('Standalone reservation lifecycle with no funded ledger', reservation_journey, start_route='reservation')
             report['standalone'] = {
                 'file': standalone_path.name, 'sha256': hashlib.sha256(standalone_path.read_bytes()).hexdigest(),
                 'unexpected_request_attempts': file_mode.attempts + loopback.attempts,
                 'direct_file': file_mode.cases[0], 'loopback': loopback.cases[0],
                 'without_storage': loopback.cases[1], 'without_javascript': loopback.cases[2],
-                'scenario_download': loopback.cases[3]}
+                'scenario_download': loopback.cases[3], 'direct_file_reservation': file_mode.cases[1],
+                'reservation': loopback.cases[4]}
         browser.close()
     OUTPUT.parent.mkdir(parents=True, exist_ok=True)
     OUTPUT.write_text(json.dumps(report, indent=2, ensure_ascii=False) + '\n', encoding='utf-8')
     print(f'{passed}/{len(run.cases)} passed. Receipt: {OUTPUT}')
     if args.standalone:
         standalone = report['standalone']
-        required = ('loopback', 'without_storage', 'without_javascript', 'scenario_download')
-        if standalone['direct_file']['status'] == 'failed' or any(standalone[key]['status'] != 'passed' for key in required):
+        required = ('loopback', 'without_storage', 'without_javascript', 'scenario_download', 'reservation')
+        direct = ('direct_file', 'direct_file_reservation')
+        if any(standalone[key]['status'] == 'failed' for key in direct) or any(standalone[key]['status'] != 'passed' for key in required):
             return 1
     return 0 if passed == len(run.cases) else 1
 

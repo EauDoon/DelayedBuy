@@ -13,7 +13,9 @@ Open the [24-hour reservation rehearsal](https://eaudoon.github.io/DelayedBuy/#r
 3. Record A’s return, cancel as the shopper, release as the merchant, or advance the rehearsal clock to expiry. Each outcome frees one unit exactly once. A merchant can decline a pending request or the shopper can withdraw it. A stale pending price requires a new request at the displayed price.
 4. Open a second tab on the same origin to review the same rehearsal when shared browser storage is available. At the deadline the hold expires automatically. A later visit attributes held time through the deadline.
 
-The evidence records requests, accepted holds, return visits, cancellation, merchant release, expiry and time allocated. Use the counts and durations to compare scripts. All results are synthetic. A live pilot would need two merchants to confirm a specific item and these terms.
+The results show how many accepted reservations ended in a return visit and how long the one unit was allocated. The request history distinguishes pending requests, declines, withdrawals, cancellations, merchant releases and expiries. These scripted outcomes provide no estimate of real demand. A live pilot would need two merchants to confirm a specific item and these terms.
+
+The browser suite below writes the rehearsal evidence to `evidence/browser-tests.json`. The five-request script exercises three acceptances, one shopper return, one cancellation and one merchant release, with one hour of total unit-time. Two other scripts race two merchant tabs for the last unit and leave an accepted request unanswered through its deadline. The expired reservation accounts for exactly 24 hours, even after a later reload.
 
 ## Try the separate demo-funded checkout
 
@@ -29,7 +31,7 @@ Alternatively, [download the single-file demo](https://github.com/EauDoon/Delaye
 
 Open **Report** from the top navigation or visit `/#report` on a local server. Pick a basket, invested time and annual rate to compare 64 card-funded scenarios. A separate fixed example compares card funding with an already-funded wallet at S$100 equivalent, seven days and 4% simple APR. The charts distinguish gross interest, refundable principal, a cancellation reward and the modeled cost of prepayment. If deploying under a repository subpath, add `#report` to the repository’s Pages root URL instead.
 
-## Synthetic merchant rehearsal
+## Demo-funded checkout comparison
 
 Three fictional shoppers each start both paths with the same S$180 Arc table lamp on 12 January 2026 at 10:00 SGT. DelayedBuy uses the demo SGD card and a one-day wait. Both paths are observed through 14 January at 10:00 SGT. Chromium drives the DelayedBuy checkout. Ordinary checkout is a scripted reference inside the test fixture.
 
