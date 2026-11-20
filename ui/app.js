@@ -1,5 +1,6 @@
 import { applyAction, demoLedger, getView, validateLedger } from '../core/ledger.mjs';
 import { reportPage, reportResults } from './report.mjs';
+import { mountReservation } from './reservation.mjs';
 import { icon } from './icons.js';
 
 const DAY = 86_400_000;
@@ -12,7 +13,7 @@ const accountNames = { card_demo: 'Demo card', wallet_demo: 'Demo wallet', hold_
 const eventNames = { held: 'Hold funded', completed: 'Purchase completed', refunded: 'Principal returned' };
 const reportChoice = { basket:100, days:7, apr:4 };
 let navigationEpoch = 0;
-const pageNames = { report:'The price of a pause', home: 'Hold the price. Decide later.', how: 'How it works', checkout: 'Start a demo hold', customer: 'Customer view', merchant: 'Merchant view' };
+const pageNames = { reservation: '24-hour reservation', report:'The price of a pause', home: 'Hold the price. Decide later.', how: 'How it works', checkout: 'Start a demo hold', customer: 'Customer view', merchant: 'Merchant view' };
 const main = document.querySelector('#main');
 const feedback = document.querySelector('#feedback');
 const dialog = document.querySelector('#confirm-dialog');
@@ -34,6 +35,9 @@ const waitingPeriods = [1, 2, 7];
 let checkout = { rail: 'card', days: 2 };
 let pending = null;
 let feedbackTimer;
+let fundedBoot;
+let fundedReady = false;
+let stopReservation;
 
 function escapeHtml(value) {
   return String(value).replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char]);
@@ -182,13 +186,16 @@ function productFigure(link = false, rail = 'card') {
 function homePage() {
   const options = waitingPeriods.map(days => '<option value="' + days + '"' + (checkout.days === days ? ' selected' : '') + '>' +
     days + (days === 1 ? ' day' : ' days') + '</option>').join('');
-  return '<section class="frame hero"><div class="hero-copy"><div class="eyebrow kicker">Checkout simulation</div>' +
+  return '<section class="frame hero"><div class="hero-copy"><div class="eyebrow kicker">Demo-funded checkout</div>' +
     '<h1>Hold the price.<br><em>Decide later.</em></h1>' +
     '<p>Fix your demo price for the Arc table lamp. This demo reserves no stock. Buy after the wait or cancel for a full refund any time before buying.</p>' +
     '<div class="hero-setup"><label for="preview-days">Waiting period</label><div class="hero-buttons">' +
     '<select id="preview-days">' + options + '</select><a class="btn orange" href="#checkout">Set up my hold ' + icon('arrow', 18) +
     '</a></div></div><div class="hero-note">' + icon('lock', 14) + ' Demo funds only. No sign-up.</div></div>' +
     productFigure(true, checkout.rail) + '</section>' +
+    '<section class="showcase"><div class="frame show-grid"><div><span class="kicker">Reservation rehearsal</span>' +
+    '<h2>A 24-hour reservation</h2><p>Request a fictional unit with S$0 due. If the simulated merchant accepts, the price is fixed until the reservation ends, up to 24 hours later.</p></div>' +
+    '<a class="btn outline" href="#reservation">Try the 24-hour reservation ' + icon('arrow', 17) + '</a></div></section>' +
     '<section class="how-section" id="how" tabindex="-1"><div class="frame"><div class="section-head"><h2>Where the payment goes</h2>' +
     '<a class="text-link" href="#report">Explore the illustrated report ' + icon('diagonal', 15) + '</a></div>' +
     '<div class="hold-flow"><div class="flow-origin">' + icon('hourglass', 24) + '<div><h3>Order hold</h3><p>The full demo price stays here until you decide.</p></div></div>' +
@@ -209,7 +216,7 @@ function checkoutPage() {
     '><span>' + icon(symbol, 17) + title + '<i class="pick"></i></span></label>';
   const days = waitingPeriods.map(n => '<label class="choice"><input type="radio" name="days" value="' + n + '"' +
     (n === checkout.days ? ' checked' : '') + '><span>' + (n === 1 ? '1 day' : n + ' days') + '</span></label>').join('');
-  return '<div class="frame workspace">' + backLink() + '<div class="kicker">Simulation / Checkout</div><h1>Start a demo hold.</h1>' +
+  return '<div class="frame workspace">' + backLink() + '<div class="kicker">Demo-funded checkout</div><h1>Start a demo hold.</h1>' +
     '<p class="intro">Choose how to fund the demo hold and when the option to buy opens.</p>' +
     '<div class="checkout-grid" id="checkout-grid">' + productFigure(false, selected) +
     '<form class="checkout-form" id="checkout-form"><fieldset aria-describedby="rail-help"><legend>Payment method</legend><div class="choices">' +
@@ -275,7 +282,7 @@ function orderDetails(order, missing) {
     '</ol></div></section>';
 }
 function customerPage(orders, selected, missing) {
-  return '<div class="frame workspace">' + backLink() + '<div class="dash-heading"><div><div class="kicker">Simulation / Customer</div><h1>Your holds.</h1>' +
+  return '<div class="frame workspace">' + backLink() + '<div class="dash-heading"><div><div class="kicker">Demo-funded checkout / Customer</div><h1>Your holds.</h1>' +
     '<p class="intro">Check your waiting period and decide what happens to each order.</p></div>' + clockPanel() +
     '</div><div class="customer-grid">' + orderList(orders, selected) + orderDetails(selected, missing) + '</div>' + resetRow() + '</div>';
 }
@@ -299,7 +306,7 @@ function ledgerRows(view) {
     accountNames[event.to] + '</td><td>' + money(order.rail, event.amount) + '</td></tr>').join('');
 }
 function merchantPage(view) {
-  return '<div class="frame workspace">' + backLink() + '<div class="dash-heading"><div><div class="kicker">Simulation / Merchant</div><h1>Merchant ledger.</h1>' +
+  return '<div class="frame workspace">' + backLink() + '<div class="dash-heading"><div><div class="kicker">Demo-funded checkout / Merchant</div><h1>Merchant ledger.</h1>' +
     '<p class="intro">Reconcile reserved principal, completed sales, and refunds by payment method.</p></div>' + clockPanel() +
     '</div><div class="totals">' + balanceCard('card', view.totals.card) + balanceCard('usdc', view.totals.usdc) +
     '</div><section class="panel"><div class="pane-head"><h2>Payment movements</h2><label class="ledger-select">Show <select id="rail-filter">' +
@@ -315,6 +322,11 @@ function render() {
     if (link.hash === '#' + page) link.setAttribute('aria-current', 'page');
     else link.removeAttribute('aria-current');
   }
+  if (page === 'reservation') {
+    if (!stopReservation) stopReservation = mountReservation(main, announce);
+    return;
+  }
+  leaveReservation();
   if (page === 'report') { main.innerHTML = reportPage(reportChoice.basket, reportChoice.days, reportChoice.apr); return; }
   if (loadError) {
     main.innerHTML = '<div class="frame workspace"><section class="panel error-panel"><div class="kicker">Simulation</div><h1>Saved demo unavailable.</h1><p>The browser could not read the saved simulation. Reset the sample data to start again.</p>' + resetRow() + '</section></div>';
@@ -326,6 +338,12 @@ function render() {
     const view = getView(state.ledger, state.now);
     const selected = id ? view.orders.find(o => o.id === id) : view.orders[0];
     main.innerHTML = page === 'customer' ? customerPage(view.orders, selected, Boolean(id && !selected)) : merchantPage(view);
+  }
+}
+function leaveReservation() {
+  if (stopReservation) {
+    stopReservation();
+    stopReservation = undefined;
   }
 }
 function closeMenu() {
@@ -345,8 +363,26 @@ function onRouteChange() {
   pending = null;
   if (dialog.open) dialog.close();
   closeMenu();
+  displayRoute(false);
+}
+async function displayRoute(initial) {
+  const epoch = navigationEpoch;
+  if (route().page !== 'reservation') {
+    if (stopReservation) {
+      leaveReservation();
+      main.replaceChildren();
+    }
+    if (!fundedReady) {
+      fundedBoot ??= loadFundedState();
+      await fundedBoot;
+      if (epoch !== navigationEpoch) return;
+    }
+  }
   render();
-  if (route().page === 'how' && !loadError) {
+  if (initial) {
+    if (route().page === 'how') document.querySelector('#how')?.scrollIntoView();
+    if (route().page === 'customer' && route().id) focusOrder();
+  } else if (route().page === 'how' && !loadError) {
     document.querySelector('#how').focus({ preventScroll: true });
     document.querySelector('#how').scrollIntoView();
   } else if (route().page === 'customer' && route().id && document.querySelector('#order-detail')) {
@@ -549,7 +585,7 @@ async function refreshSharedState() {
     else main.focus({ preventScroll: true });
   }
 }
-async function boot() {
+async function loadFundedState() {
   legacyStorage = availableStorage('localStorage');
   tabStorage = availableStorage('sessionStorage');
   // A sessionStorage save belongs to this tab, including an existing v1.1 order.
@@ -567,10 +603,7 @@ async function boot() {
   }
   try { await updateState(); }
   catch { loadError = true; }
-  // Navigation during the initial storage lock is picked up by this first render.
-  window.addEventListener('hashchange', onRouteChange);
-  render();
-  if (route().page === 'how') document.querySelector('#how')?.scrollIntoView();
-  if (route().page === 'customer' && route().id) focusOrder();
+  fundedReady = true;
 }
-boot();
+window.addEventListener('hashchange', onRouteChange);
+displayRoute(true);

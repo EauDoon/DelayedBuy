@@ -1,10 +1,25 @@
-# delayedbuy v1.2
+# delayedbuy v1.3
 
-Start a demo hold on the fictional Arc table lamp. The hold sets aside demo funds and fixes your price in the selected unit. It reserves no stock and has no automatic expiry. The waiting period determines when you can first buy. Choose **Complete purchase**, then **Confirm purchase** to buy, or cancel any time before buying for a full return to the original demo card or wallet.
+Rehearse a 24-hour reservation for **one fictional Arc table lamp**. Shopper A or B requests the displayed SGD price with S$0 due. A simulated merchant reviews the request and can agree to hold the unit at that price. The 24 hours start at acceptance. Returning records a decision and releases the unit. The rehearsal creates no purchase.
 
-**Simulation only.** There are no real accounts, card fields, wallets, deposits, payouts, merchants or fees. Every order and balance is an example stored in this browser. Nobody receives money. Nothing earns interest.
+**Simulation only.** The two shopper labels, merchant decisions and unit are fixtures stored in this browser. No personal details, merchant agreement, live inventory, payment or external service is involved.
 
-## Try it
+## Rehearse the last unit
+
+Open the [24-hour reservation rehearsal](https://eaudoon.github.io/DelayedBuy/#reservation). On a local server or in the downloadable HTML, use **24-hour reservation**.
+
+1. Request the S$180 lamp as Shopper A and Shopper B. Both requests can be pending. Only the merchant’s acceptance allocates the unit and starts the clock.
+2. Accept A. Attempt to accept B while A holds the lamp. Only A can have the unit. Change the offer to S$200 and check A’s accepted price and deadline.
+3. Record A’s return, cancel as the shopper, release as the merchant, or advance the rehearsal clock to expiry. Each outcome frees one unit exactly once. A merchant can decline a pending request or the shopper can withdraw it. A stale pending price requires a new request at the displayed price.
+4. Open a second tab on the same origin to review the same rehearsal when shared browser storage is available. At the deadline the hold expires automatically. A later visit attributes held time through the deadline.
+
+The results show how many accepted reservations ended in a return visit and how long the one unit was allocated. The request history distinguishes pending requests, declines, withdrawals, cancellations, merchant releases and expiries. These scripted outcomes provide no estimate of real demand. A live pilot would need two merchants to confirm a specific item and these terms.
+
+The browser suite below writes the rehearsal evidence to `evidence/browser-tests.json`. The five-request script exercises three acceptances, one shopper return, one cancellation and one merchant release, with one hour of total unit-time. Two other scripts race two merchant tabs for the last unit and leave an accepted request unanswered through its deadline. The expired reservation accounts for exactly 24 hours, even after a later reload.
+
+## Try the separate demo-funded checkout
+
+The earlier checkout fixes a fictional price using demo funds. It reserves no stock and has no automatic expiry. Its waiting period sets the earliest purchase time. **Complete purchase** followed by **Confirm purchase** records a simulated purchase in its separate ledger.
 
 1. From this directory, run `python3 -m http.server 4173 --bind 127.0.0.1` and open [the local demo](http://127.0.0.1:4173/).
 2. In checkout, switch between the SGD card and USDC wallet, then choose a waiting period. Review the fixed price and earliest purchase time in SGT above **Create demo hold**. Open the customer view to see the terms saved for that hold.
@@ -16,7 +31,7 @@ Alternatively, [download the single-file demo](https://github.com/EauDoon/Delaye
 
 Open **Report** from the top navigation or visit `/#report` on a local server. Pick a basket, invested time and annual rate to compare 64 card-funded scenarios. A separate fixed example compares card funding with an already-funded wallet at S$100 equivalent, seven days and 4% simple APR. The charts distinguish gross interest, refundable principal, a cancellation reward and the modeled cost of prepayment. If deploying under a repository subpath, add `#report` to the repository’s Pages root URL instead.
 
-## Synthetic merchant rehearsal
+## Demo-funded checkout comparison
 
 Three fictional shoppers each start both paths with the same S$180 Arc table lamp on 12 January 2026 at 10:00 SGT. DelayedBuy uses the demo SGD card and a one-day wait. Both paths are observed through 14 January at 10:00 SGT. Chromium drives the DelayedBuy checkout. Ordinary checkout is a scripted reference inside the test fixture.
 
@@ -57,6 +72,6 @@ On first open, v1.2 imports a shared v1.1 save into IndexedDB with its original 
 
 The offline report uses `economics/sensitivity.csv` for its 64 card cases and `economics/scenarios.csv` for the fixed funding comparison. The downloadable sensitivity CSV stores APRs as fractions (0.04 means 4%). Its break-even APRs are continuous estimates before whole-cent settlement rounding. Browser tests cover the report and the checkout, including Back navigation during a confirmation, keyboard focus restoration and a queued checkout that must not override later navigation.
 
-**Static hosting:** the prebuilt `docs/` directory contains only the standalone simulator and `.nojekyll`. To enable GitHub Pages, select **Settings → Pages → Deploy from a branch → main → /docs**. Publication of the source does not itself enable hosting.
+GitHub Pages serves the prebuilt standalone from `main` at `/docs`. The release checks compare that file with the downloadable demo byte for byte.
 
 [Read the v1.0 baseline](https://github.com/EauDoon/DelayedBuy/tree/818fedf9ec625a8cb9513f318a713c38789df7e7).

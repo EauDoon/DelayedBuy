@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'none'; form-action 'none'; object-src 'none'; base-uri 'none'">
   <meta name="theme-color" content="#faf8f2">
-  <meta name="description" content="Hold a fictional price with demo funds. This demo reserves no stock. The hold has no automatic expiry. Confirm a purchase after the wait or cancel any time before buying.">
+  <meta name="description" content="Rehearse a no-payment reservation for one fictional lamp at a fixed price for 24 hours, or explore the separate demo-funded checkout.">
   <title>delayedbuy · Hold the price. Decide later.</title>
   <link rel="icon" type="image/svg+xml" href="./ui/assets/mark.svg">
   <link rel="stylesheet" href="./ui/style.css">
@@ -21,6 +21,7 @@
         <button type="button" class="menu-button" aria-controls="primary-nav" aria-expanded="false" aria-label="Open menu"><span></span><span></span></button>
       </div>
       <nav id="primary-nav" aria-label="Primary">
+        <a href="#reservation">24-hour reservation</a>
         <a href="#report">Report</a>
         <a href="#how">How it works</a>
         <a href="#customer">Customer view</a>
@@ -30,8 +31,9 @@
   </header>
   <main id="main" tabindex="-1">
     <div class="frame boot">
-      <span class="kicker">Checkout simulation</span><h1>Hold the price.<br><em>Decide later.</em></h1>
-      <p>Creating a demo hold sets aside demo funds and fixes your price for the Arc table lamp. This demo reserves no stock.</p>
+      <span class="kicker">DelayedBuy v1.3</span><h1>Hold the price.<br><em>Decide later.</em></h1>
+      <p>In the reservation rehearsal, a simulated merchant can accept a request for one fictional lamp at a fixed price for 24 hours. Nothing is due and no purchase takes place.</p>
+      <p>In the separate demo-funded checkout, creating a demo hold sets aside demo funds and fixes your price for the Arc table lamp. This demo reserves no stock.</p>
       <div class="boot-help"><p>The hold has no automatic expiry. After the wait, choose <strong>Complete purchase</strong>, then <strong>Confirm purchase</strong> to buy. You can cancel any time before buying.</p>
         <p>Enable JavaScript to choose a waiting period and try checkout. No money moves.</p>
         <p>In the separate report model, S$100 held for seven days at an assumed 4% annual rate earns about S$0.0767 gross. The shopper’s modeled cancellation share is S$0.06. The checkout simulation pays no interest.</p></div>

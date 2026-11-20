@@ -1514,11 +1514,7 @@ dialog::backdrop {
   }
 }
 
-@media (max-width:640px) {
-  .frame,.nav-frame {
-    width: calc(100% - 36px)
-  }
-
+@media (max-width:940px) {
   .site-header {
     z-index: 5
   }
@@ -1561,6 +1557,12 @@ dialog::backdrop {
   #primary-nav a[aria-current=page]::after {
     width: 25px;
     bottom: 3px
+  }
+}
+
+@media (max-width:640px) {
+  .frame,.nav-frame {
+    width: calc(100% - 36px)
   }
 
   .hero {
@@ -1945,4 +1947,55 @@ dialog::backdrop {
 @media (max-width: 580px) {
   .r-comparison th,.r-comparison td { font-size: .84rem; padding: .45rem .18rem }
   .r-comparison tr > :first-child { width: 40% }
+}
+
+/* Merchant reservation pilot */
+.reservation-page .dash-heading { align-items: start; gap: 22px; flex-wrap: wrap }
+.reservation-page .res-clock { flex-wrap: wrap }
+.reservation-page .res-clock time { display: block; margin-top: 2px; font-size: 12px }
+.reservation-page .res-clock-buttons { display: flex; gap: 6px }
+.reservation-page .res-clock-buttons button { min-height: 40px }
+.reservation-page .res-offer {
+  display: grid; grid-template-columns: minmax(110px,180px) minmax(0,1fr);
+  align-items: stretch; overflow: hidden; margin-bottom: 20px; border: 1px solid #c5b7cc;
+  border-radius: 10px; background: #eee7f4
+}
+.reservation-page .res-offer img { width: 100%; height: 100%; max-height: 205px; object-fit: cover }
+.reservation-page .res-offer > div { align-self: center; padding: 18px clamp(16px,3vw,36px) }
+.reservation-page .res-offer h2 { font: 500 clamp(27px,3.4vw,40px)/1.12 var(--serif); letter-spacing: -.035em }
+.reservation-page .res-offer-line { display: flex; gap: 12px; align-items: baseline; flex-wrap: wrap; margin: 5px 0 8px }
+.reservation-page .res-offer-line strong { font-size: 19px }
+.reservation-page .res-offer-line span { font-size: 14px; color: #4a4050 }
+.reservation-page .res-offer p { max-width: 70ch; font-size: 15px }
+.reservation-page .res-columns { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 20px; align-items: start }
+.reservation-page .res-columns .panel > p,.reservation-page .res-evidence > p { margin-top: 8px; color: var(--muted); font-size: 14px }
+.reservation-page .res-card { padding: 16px 0 2px; margin-top: 16px; border-top: 1px solid var(--line); overflow-wrap: anywhere }
+.reservation-page .res-card-head { display: flex; align-items: baseline; flex-wrap: wrap; gap: 5px 12px; justify-content: space-between }
+.reservation-page .res-card h3 { font-size: 17px; letter-spacing: -.025em }
+.reservation-page .res-card p { font-size: 14px; margin-top: 6px }
+.reservation-page .res-card .res-date { font-size: 13px; color: var(--muted) }
+.reservation-page .res-card > .btn,.reservation-page .res-card .action-row { margin-top: 11px }
+.reservation-page .res-card .btn { min-height: 42px; padding: 9px 13px }
+.reservation-page .res-badge { border-radius: 4px; padding: 3px 8px; background: #e9e5dd; color: #494341; font-size: 12px; font-weight: 650 }
+.reservation-page .res-pending { background: #f4e3c8; color: #664515 }
+.reservation-page .res-active { background: #deeedb; color: #2e532c }
+.reservation-page .res-reason { padding: 8px 10px; border-left: 3px solid #bb8854; background: #f8efe1 }
+.reservation-page .res-price-control { display: flex; flex-wrap: wrap; gap: 6px 14px; align-items: center; margin: 15px 0 10px; font-size: 14px; font-weight: 650 }
+.reservation-page .res-price-control select { padding: 7px 9px; min-height: 40px; border: 1px solid #928b80; border-radius: 5px; color: var(--ink); background: var(--paper) }
+.reservation-page .res-empty { padding-top: 12px; border-top: 1px solid var(--line) }
+.reservation-page .res-evidence { margin-top: 20px }
+.reservation-page .res-metrics { display: grid; grid-template-columns: repeat(auto-fit,minmax(112px,1fr)); gap: 10px; margin: 18px 0 0 }
+.reservation-page .res-metrics > div { min-width: 0; padding: 10px; border-top: 2px solid #cfc2d8; background: var(--paper) }
+.reservation-page .res-metrics dt { font-size: 12px; color: var(--muted) }
+.reservation-page .res-metrics dd { font-size: 20px; font-weight: 650; margin: 4px 0 0; font-variant-numeric: tabular-nums }
+.reservation-page .res-evidence details { margin-top: 16px }
+.reservation-page .res-evidence summary { cursor: pointer; font-weight: 650; width: fit-content; padding: 4px 0 }
+.reservation-page .res-table-wrap { overflow: auto; margin-top: 10px }
+.reservation-page .res-table-wrap:focus-visible { outline: 3px solid #5950a7; outline-offset: 2px }
+@media (max-width: 720px) {
+  .reservation-page .res-columns { grid-template-columns: minmax(0,1fr); gap: 14px }
+  .reservation-page .res-offer { display: block }
+  .reservation-page .res-offer img { display: block; width: 100%; height: 110px; object-position: center 52% }
+  .reservation-page .res-offer > div { padding: 14px 16px 16px }
+  .reservation-page .res-clock { gap: 8px; align-self: flex-start }
 }
