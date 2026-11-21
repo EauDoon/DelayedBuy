@@ -2,8 +2,10 @@ import { applyAction, demoLedger, getView, validateLedger } from '../core/ledger
 import { reportPage, reportResults } from './report.mjs';
 import { mountReservation } from './reservation.mjs';
 import { icon } from './icons.js';
+import { mountLampStudio } from './lamp-studio.mjs';
 
 const DAY = 86_400_000;
+const LAMP_PHOTO = './ui/assets/arc-lamp.webp';
 const STORE_KEY = 'delayedbuy.sandbox.v1';
 const rails = {
   card: { label: 'Demo card', currency: 'SGD', source: 'card_demo', amount: 18_000 },
@@ -13,7 +15,7 @@ const accountNames = { card_demo: 'Demo card', wallet_demo: 'Demo wallet', hold_
 const eventNames = { held: 'Hold funded', completed: 'Purchase completed', refunded: 'Principal returned' };
 const reportChoice = { basket:100, days:7, apr:4 };
 let navigationEpoch = 0;
-const pageNames = { reservation: '24-hour reservation', report:'The price of a pause', home: 'Hold the price. Decide later.', how: 'How it works', checkout: 'Start a demo hold', customer: 'Customer view', merchant: 'Merchant view' };
+const pageNames = { reservation: '24-hour reservation', report:'The price of a pause', home: 'Sleep on it.', how: 'How it works', checkout: 'Start a demo hold', customer: 'Customer view', merchant: 'Merchant view' };
 const main = document.querySelector('#main');
 const feedback = document.querySelector('#feedback');
 const dialog = document.querySelector('#confirm-dialog');
@@ -38,6 +40,7 @@ let feedbackTimer;
 let fundedBoot;
 let fundedReady = false;
 let stopReservation;
+let stopLampStudio;
 
 function escapeHtml(value) {
   return String(value).replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char]);
@@ -178,7 +181,7 @@ function productFigure(link = false, rail = 'card') {
   const tag = link ? 'a' : 'figure';
   const end = link ? '<span class="round-icon">' + icon('diagonal', 14) + '</span>' : '';
   return '<' + tag + (link ? ' href="#checkout" aria-label="Try checkout with the Arc table lamp"' : '') + ' class="product-figure">' +
-    '<img class="product-shot" src="./ui/assets/arc-lamp.webp" width="1254" height="1254" alt="A vermilion mushroom-shaped table lamp on a lilac studio floor" fetchpriority="high">' +
+    '<img class="product-shot" src="' + LAMP_PHOTO + '" width="1254" height="1254" alt="A vermilion mushroom-shaped table lamp on a lilac studio floor" fetchpriority="high">' +
     '<span class="photo-label">' + icon('box', 12) + ' Demo item</span>' +
     '<div class="product-caption"><strong>Arc table lamp</strong><span class="caption-right"><small>' +
     money(rail, rails[rail].amount) + '</small>' + end + '</span></div></' + tag + '>';
@@ -186,23 +189,46 @@ function productFigure(link = false, rail = 'card') {
 function homePage() {
   const options = waitingPeriods.map(days => '<option value="' + days + '"' + (checkout.days === days ? ' selected' : '') + '>' +
     days + (days === 1 ? ' day' : ' days') + '</option>').join('');
-  return '<section class="frame hero"><div class="hero-copy"><div class="eyebrow kicker">Demo-funded checkout</div>' +
-    '<h1>Hold the price.<br><em>Decide later.</em></h1>' +
-    '<p>Fix your demo price for the Arc table lamp. This demo reserves no stock. Buy after the wait or cancel for a full refund any time before buying.</p>' +
-    '<div class="hero-setup"><label for="preview-days">Waiting period</label><div class="hero-buttons">' +
-    '<select id="preview-days">' + options + '</select><a class="btn orange" href="#checkout">Set up my hold ' + icon('arrow', 18) +
-    '</a></div></div><div class="hero-note">' + icon('lock', 14) + ' Demo funds only. No sign-up.</div></div>' +
-    productFigure(true, checkout.rail) + '</section>' +
-    '<section class="showcase"><div class="frame show-grid"><div><span class="kicker">Reservation rehearsal</span>' +
-    '<h2>A 24-hour reservation</h2><p>Request a fictional unit with S$0 due. If the simulated merchant accepts, the price is fixed until the reservation ends, up to 24 hours later.</p></div>' +
-    '<a class="btn outline" href="#reservation">Try the 24-hour reservation ' + icon('arrow', 17) + '</a></div></section>' +
-    '<section class="how-section" id="how" tabindex="-1"><div class="frame"><div class="section-head"><h2>Where the payment goes</h2>' +
-    '<a class="text-link" href="#report">Explore the illustrated report ' + icon('diagonal', 15) + '</a></div>' +
-    '<div class="hold-flow"><div class="flow-origin">' + icon('hourglass', 24) + '<div><h3>Order hold</h3><p>The full demo price stays here until you decide.</p></div></div>' +
-    '<ul class="flow-options"><li class="refund-path">' + icon('refund', 20) + '<div><h3>Cancel while held</h3><p>Full amount → original demo card or wallet</p></div></li>' +
-    '<li class="purchase-path">' + icon('check', 20) + '<div><h3>Buy after the wait</h3><p>Full amount → demo merchant</p></div></li></ul></div></div></section>' +
-    '<section class="showcase"><div class="frame show-grid"><div><span class="kicker">Merchant view</span><h2>Follow the money.</h2><p>See each hold, completed purchase, and refund in the demo ledger.</p></div><a class="btn outline" href="#merchant">Open merchant view ' +
-    icon('arrow', 17) + '</a></div></section>';
+  return `<div class="pause-home">
+    <section class="frame hero pause-hero" aria-labelledby="pause-title">
+      <div class="pause-intro">
+        <p class="pause-eyeline"><span class="pause-mark" aria-hidden="true"></span>The pause study <span>/</span> No. 01</p>
+        <h1 id="pause-title">Sleep <br><em>on it.</em></h1>
+        <p class="pause-deck">Like the lamp? Ask for a day to decide. If the simulated merchant accepts, they hold the lamp at the agreed price for up to 24 hours.</p>
+        <a class="pause-cta" href="#reservation">Try the 24-hour reservation ${icon('arrow',19)}</a>
+        <p class="pause-small">S$0 due. No purchase. Fictional item.</p>
+      </div>
+      <figure class="studio-figure">
+        <div class="studio-stage">
+          <img class="product-shot" src="${LAMP_PHOTO}" width="1254" height="1254" alt="The fictional Arc table lamp, with a glossy orange dome and flared base, in a lilac studio." fetchpriority="high">
+          <canvas class="studio-canvas" aria-hidden="true" hidden></canvas>
+          <span class="studio-folio" aria-hidden="true">FIG. 01&nbsp; / &nbsp;OBJECT STUDY</span>
+          <button type="button" class="studio-turn" hidden>${icon('refund',15)} Rotate view</button>
+        </div>
+        <figcaption><div><span class="pause-meta">The object</span><strong>Arc table lamp</strong></div>
+        <div><span class="pause-meta">Starting offer</span><strong>S$180</strong></div></figcaption>
+      </figure>
+    </section>
+    <section class="pause-how" id="how" tabindex="-1" aria-labelledby="pause-how-title"><div class="frame">
+      <div class="pause-section-top"><span class="pause-eyeline">01 <span>/</span> The reservation</span><span class="pause-meta">One lamp. No deposit.</span></div>
+      <h2 id="pause-how-title">When does the clock start?</h2>
+      <ol class="pause-steps">
+        <li><span class="step-symbol" aria-hidden="true">${icon('lamp',24)}</span><h3>Request the lamp.</h3><p>A request costs nothing. It doesn’t set the lamp aside yet.</p></li>
+        <li><span class="step-symbol" aria-hidden="true">${icon('clock',24)}</span><h3>Wait for a yes.</h3><p>Only the merchant’s acceptance holds the unit, fixes the price and starts the 24-hour clock.</p></li>
+        <li><span class="step-symbol" aria-hidden="true">${icon('refund',24)}</span><h3>Decide in your time.</h3><p>Return, cancel or let the hold expire. Each releases the lamp. Returning records a decision, not a sale.</p></li>
+      </ol>
+    </div></section>
+    <section class="pause-lab"><div class="frame">
+      <div class="pause-section-top"><span class="pause-eyeline">02 <span>/</span> The comparison</span><span class="pause-meta">Separate simulation</span></div>
+      <div class="pause-lab-grid"><div><h2>What if you paid first?</h2>
+        <p>The earlier checkout sets aside demo funds, not stock. After the wait you can confirm a purchase. Cancel before buying and the full amount returns to the original demo card or wallet.</p>
+        <div class="pause-links"><a href="#report">Explore the illustrated report ${icon('diagonal',15)}</a><a href="#merchant">Open merchant view ${icon('diagonal',15)}</a></div>
+      </div><div class="pause-slip"><div class="slip-head"><span class="pause-meta">Demo-funded checkout</span>${icon('card',20)}</div>
+        <a class="slip-product" href="#checkout" aria-label="Try checkout with the Arc table lamp">Arc table lamp ${icon('diagonal',15)}</a>
+        <div class="hero-setup"><label for="preview-days">Waiting period</label><div class="hero-buttons">
+        <select id="preview-days">${options}</select><a class="btn black" href="#checkout">Set up my hold ${icon('arrow',16)}</a></div></div>
+      </div></div>
+    </div></section></div>`;
 }
 function backLink() { return '<a href="#home" class="backlink">' + icon('back', 15) + ' Back to home</a>'; }
 function checkoutTerms() {
@@ -317,6 +343,8 @@ function merchantPage(view) {
 }
 function render() {
   const {page, id} = route();
+  stopLampStudio?.();
+  stopLampStudio = undefined;
   document.title = 'delayedbuy · ' + pageNames[page];
   for (const link of menu.querySelectorAll('a')) {
     if (link.hash === '#' + page) link.setAttribute('aria-current', 'page');
@@ -332,7 +360,10 @@ function render() {
     main.innerHTML = '<div class="frame workspace"><section class="panel error-panel"><div class="kicker">Simulation</div><h1>Saved demo unavailable.</h1><p>The browser could not read the saved simulation. Reset the sample data to start again.</p>' + resetRow() + '</section></div>';
     return;
   }
-  if (page === 'home' || page === 'how') main.innerHTML = homePage();
+  if (page === 'home' || page === 'how') {
+    main.innerHTML = homePage();
+    stopLampStudio = mountLampStudio(main);
+  }
   else if (page === 'checkout') main.innerHTML = checkoutPage();
   else {
     const view = getView(state.ledger, state.now);
