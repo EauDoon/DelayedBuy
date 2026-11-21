@@ -27,17 +27,20 @@ void main() {
     float soft=exp(-dot(shadow,shadow)*1.4), contact=exp(-dot(p,p)*4.4);
     float farLight=smoothstep(-4.,5.,dot(p,vec2(-.64,.42)));
     c=mix(vec3(.58,.46,.72),vec3(.86,.75,.93),farLight);
-    c*=1.-.24*soft-.36*contact;
+    c*=1.-.32*soft-.41*contact;
+    c=mix(c,vec3(.70,.58,.80),smoothstep(4.,12.,length(p)));
   } else {
     float ndl=max(dot(n,l),0.);
     vec3 reflected=reflect(-v,n);
     // Two tall studio softboxes reflected in the glazed shade and stem.
-    float box=exp(-sq((reflected.x+.63)*5.6)-sq((reflected.y-.53)*2.7))*smoothstep(-.2,.8,reflected.z);
-    float seam=smoothstep(.005,.05,abs(reflected.x+.63));
+    vec3 face=normalize(vec3(-.62,.50,.64)), horiz=normalize(cross(vec3(0.,1.,0.),face));
+    vec2 uv=vec2(dot(reflected,horiz),dot(reflected,cross(face,horiz)))/max(.18,dot(face,reflected));
+    float box=(1.-smoothstep(.16,.25,abs(uv.x)))*(1.-smoothstep(.25,.34,abs(uv.y)))*smoothstep(.15,.7,dot(face,reflected));
+    float seam=(.5+.5*smoothstep(.012,.026,abs(uv.x)))*(.7+.3*smoothstep(.006,.02,abs(uv.y)));
     float ribbon=exp(-sq((reflected.x-.86)*8.)-sq((reflected.y-.2)*1.9));
     float edge=pow(1.-max(dot(n,v),0.),3.);
     c=color*(.50+.57*ndl+.15*max(n.y,0.));
-    c+=vec3(1.,.82,.69)*box*(.62+.32*seam)+vec3(.52,.48,.65)*(.47*ribbon+.20*edge);
+    c+=vec3(1.,.82,.69)*box*seam*.83+vec3(.52,.48,.65)*(.47*ribbon+.20*edge);
   }
   gl_FragColor=vec4(clamp(c+grain*.004,0.,1.),1.);
 }`;

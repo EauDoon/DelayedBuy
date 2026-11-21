@@ -502,7 +502,11 @@ main.addEventListener('click', event => {
 main.addEventListener('change', event => {
   if (event.target.id === 'preview-days') {
     const days = Number(event.target.value);
-    if (waitingPeriods.includes(days)) checkout.days = days;
+    if (waitingPeriods.includes(days)) {
+      checkout.days = days;
+      // A keyboard change should leave its next action visible, including on a narrow screen.
+      event.target.closest('.hero-setup')?.scrollIntoView({block: 'nearest'});
+    }
     return;
   }
   if (event.target.matches('select[data-report]')) {
