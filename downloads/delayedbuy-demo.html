@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-0dONkL73HaQAjgIhCgSQZPEo7XaafDZHuPbICbuJSkk='; style-src 'unsafe-inline'; img-src data:; font-src data:; connect-src 'none'; form-action 'none'; base-uri 'none'; object-src 'none'">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-ViRc4xYrp12MxpPnVhxNPtka4kF/nuCQPF4Tdd6fZNs='; style-src 'unsafe-inline'; img-src data:; font-src data:; connect-src 'none'; form-action 'none'; base-uri 'none'; object-src 'none'">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#faf8f2">
   <meta name="description" content="Rehearse a no-payment reservation for one fictional lamp at a fixed price for 24 hours, or explore the separate demo-funded checkout.">
@@ -2852,6 +2852,7 @@ function reviewCard(request, view) {
     '</div>' + requestFacts(request) + controls + '</article>';
 }
 function evidence(view) {
+  const closed = view.metrics.returns + view.metrics.cancellations + view.metrics.releases + view.metrics.expiries;
   const cells = Object.entries(metricLabels).map(([key, label]) =>
     '<div><dt>' + label + '</dt><dd data-res-metric="' + key + '" data-value="' + view.metrics[key] + '">' +
     (key === 'timeHeldMs' ? duration(view.metrics[key]) : view.metrics[key]) + '</dd></div>').join('');
@@ -2861,8 +2862,10 @@ function evidence(view) {
     (r.acceptedAt === null ? '—' : duration((r.closedAt ?? view.now) - r.acceptedAt)) + '</td></tr>').join('');
   return '<section class="res-evidence panel" aria-labelledby="res-evidence-title"><h2 id="res-evidence-title">Rehearsal results</h2>' +
     '<p>Counts cover the two fictional shoppers in this browser. Unit-time runs from acceptance until the unit is released or expires. A return counts a visit. No payments or sales are recorded.</p>' +
-    '<p><strong>' + view.metrics.returns + ' of ' + view.metrics.accepted + ' accepted reservations</strong> ended with a shopper return. ' +
+    '<p data-res-outcomes>' + (closed ? '<strong>' + view.metrics.returns + ' of ' + closed + ' completed reservations</strong> ended with a shopper return.' :
+      'No completed reservations yet; a return rate is not available.') + ' ' +
     view.requests.filter(r => r.status === 'pending').length + ' pending · ' + (1 - view.available) + ' active.</p>' +
+    '<button type="button" class="btn outline" data-res-action="snapshot">Download current results (JSON)</button>' +
     '<dl class="res-metrics">' + cells + '</dl>' + (rows ? '<details id="res-history"><summary id="res-history-toggle">Request history</summary>' +
     '<div class="res-table-wrap" role="region" aria-label="Request history table" tabindex="0" id="res-history-table"><table><thead><tr><th scope="col">Shopper</th>' +
     '<th scope="col">Requested · SGT</th><th scope="col">Requested price</th><th scope="col">Outcome</th><th scope="col">Unit-time</th></tr></thead><tbody>' +
@@ -2882,12 +2885,11 @@ function historyControls(view, persistence) {
       '<button type="button" class="btn outline" id="res-export" data-res-action="archive">Download archived histories (JSON)</button>' : '') + '</section>';
 }
 
-async function downloadArchives() {
-  const archives = await archivedReservations();
-  const url = URL.createObjectURL(new Blob([JSON.stringify({ version: 1, archives }, null, 2) + '\n'], { type: 'application/json' }));
+function downloadJson(filename, data) {
+  const url = URL.createObjectURL(new Blob([JSON.stringify(data, null, 2) + '\n'], { type: 'application/json' }));
   const link = document.createElement('a');
   link.href = url;
-  link.download = 'delayedbuy-reservation-archives.json';
+  link.download = filename;
   link.click();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
@@ -2994,9 +2996,20 @@ function mountReservation(main, announce) {
     const type = control.dataset.resAction;
     if ((type === 'price') !== (event.type === 'change')) return;
     if (type === 'retry') { refresh(); return; }
-    if (type === 'archive') {
-      try { await downloadArchives(); }
-      catch { if (current()) announce('The archived reservation histories could not be downloaded.'); }
+    if (type === 'archive' || type === 'snapshot') {
+      try {
+        if (type === 'archive') {
+          const archives = await archivedReservations();
+          if (current()) downloadJson('delayedbuy-reservation-archives.json', { version: 1, archives });
+        } else {
+          const view = await readReservation();
+          if (current()) downloadJson('delayedbuy-reservation-results.json', {
+            schema: 'delayedbuy/reservation-results@1', simulationOnly: true, currency: 'SGD',
+            rehearsalTime: new Date(view.now).toISOString(), availableUnits: view.available,
+            offerPriceCents: view.priceCents, metrics: view.metrics, requests: view.requests
+          });
+        }
+      } catch { if (current()) announce('The reservation results could not be downloaded.'); }
       return;
     }
     if (type === 'restart' && (!displayed?.history.canRestart ||

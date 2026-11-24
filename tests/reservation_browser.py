@@ -102,6 +102,7 @@ def reservation_journey(page, base, funded_raw=None):
     expect(receipt(page, first)).to_contain_text('This request holds no stock')
     action(page, 'accept', first).click()
     expect(receipt(page, first)).to_have_attribute('data-status', 'active')
+    expect(page.locator('[data-res-outcomes]')).to_contain_text('No completed reservations yet')
     assert_stock(page, 0)
     page.get_by_label('Price for new requests').select_option('20000')
     expect(page.locator('[data-res-offer]')).to_have_text('S$200.00')
@@ -137,6 +138,15 @@ def reservation_journey(page, base, funded_raw=None):
                     releases=1, expiries=0, timeHeldMs=3_600_000)
     page.reload(wait_until='load')
     metrics = {key: assert_metric(page, key, value) for key, value in expected.items()}
+    expect(page.locator('[data-res-outcomes]')).to_contain_text('1 of 3 completed reservations')
+    with page.expect_download() as pending:
+        page.get_by_role('button', name='Download current results (JSON)').click()
+    item = pending.value
+    assert item.suggested_filename == 'delayedbuy-reservation-results.json'
+    with open(item.path(), encoding='utf-8') as handle:
+        snapshot = json.load(handle)
+    assert snapshot['simulationOnly'] is True and snapshot['metrics'] == expected
+    assert len(snapshot['requests']) == 5 and snapshot['availableUnits'] == 1
     assert_stock(page, 1)
     page.get_by_text('Request history', exact=True).click()
     history = page.locator('#res-history tbody tr')
