@@ -1,0 +1,2 @@
+# SVGs are embedded as exact bytes in the reproducible standalone HTML.
+*.svg text eol=lf

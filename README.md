@@ -6,6 +6,8 @@ Rehearse a 24-hour reservation for **one fictional Arc table lamp**. Shopper A o
 
 ## Rehearse the last unit
 
+The next rehearsal release separates pending and active requests from completed reservation outcomes. **Download current results (JSON)** captures the committed rehearsal at its displayed simulation time, without checkout data. The release check uses five simulated requests: three completed reservations, one return, and no sale.
+
 Open the [24-hour reservation rehearsal](https://eaudoon.github.io/DelayedBuy/#reservation). On a local server or in the downloadable HTML, use **24-hour reservation**.
 
 1. Request the S$180 lamp as Shopper A and Shopper B. Both requests can be pending. Only the merchant’s acceptance allocates the unit and starts the clock.
