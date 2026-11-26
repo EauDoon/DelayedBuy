@@ -2071,3 +2071,15 @@ dialog::backdrop {
   .pause-lab-grid { grid-template-columns: 1fr; }.pause-home h2 { font-size: clamp(35px,7.8vw,54px); }
 }
 @media(prefers-reduced-motion:reduce){.pause-cta,.studio-turn,.pause-slip .btn { transition: none; }.pause-slip .btn:hover { transform:none; }}
+
+.map-page header{max-width:52rem;margin:2rem 0}.map-grid{display:grid;grid-template-columns:minmax(0,1.7fr) minmax(16rem,1fr);gap:1rem}
+.map-plot{align-self:start;overflow:hidden;border-radius:1.2rem;background:radial-gradient(ellipse at 55% 70%,#473f55,#251e2d 82%);color:#f6f0e6;border:1px solid #544858}
+.map-svg{display:block;width:100%;touch-action:pan-y;cursor:grab;background-image:radial-gradient(#b6a5b647 .9px,transparent 1px);background-size:15px 15px}
+.map-svg:active{cursor:grabbing}.map-svg line{stroke:#ac9aae;stroke-width:1.5}.map-svg line.map-active{stroke:#ff995b;stroke-width:3}
+.map-svg circle{fill:#e2cfea;stroke:#fff6ea;stroke-width:1.5}.map-svg .map-hit{fill:transparent;stroke:none}.map-svg .map-active circle:not(.map-hit){fill:#ff8538}
+.map-svg text{font:600 11px system-ui;fill:#fff9ec;paint-order:stroke;stroke:#302737;stroke-width:4;stroke-linejoin:round}.map-svg g{cursor:pointer}
+.map-controls,.map-picker{display:flex;flex-wrap:wrap;gap:.45rem}.map-controls{padding:.6rem 1rem 1rem}.map-controls button,.map-picker button{min-height:44px;border-radius:1.4rem;padding:.45rem 1rem;cursor:pointer;font:inherit}
+.map-controls button{background:#42394b;color:white;border:1px solid #ab9aab}.map-picker button{border:1px solid #605564;background:transparent;color:#312937}.map-picker button[aria-pressed=true]{background:#312937;color:#fff7e8}
+.map-note{border:1px solid #b4a8b2;background:#f3eee6;border-radius:1.2rem;padding:clamp(1rem,3vw,2rem);overflow-wrap:anywhere}.map-note h2{margin:.5rem 0;font-size:2rem}.map-note p{line-height:1.5}.map-note a{display:block;margin-top:.65rem;text-decoration:underline}.map-edge{font-weight:600}
+.map-picker{margin:1.3rem 0;padding:0;border:0}.map-picker legend{font-weight:700;margin-bottom:.7rem}.map-data pre{white-space:pre-wrap;overflow-wrap:anywhere}.map-data summary{cursor:pointer}.res-filter{display:flex;align-items:center;gap:.7rem;flex-wrap:wrap;margin:1rem 0}.res-filter select{font:inherit;padding:.4rem}.res-table-wrap tr[hidden]{display:none}
+@media(max-width:720px){.map-grid{grid-template-columns:1fr}.map-note{padding:1rem}.map-page header{margin:1rem 0}.map-picker{gap:.3rem}}

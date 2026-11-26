@@ -23,6 +23,7 @@
       <nav id="primary-nav" aria-label="Primary">
         <a href="#reservation">24-hour reservation</a>
         <a href="#report">Report</a>
+        <a href="#map">Rehearsal map</a>
         <a href="#how">How it works</a>
         <a href="#customer">Customer view</a>
         <a href="#merchant">Merchant view</a>
@@ -35,6 +36,11 @@
       <noscript><img class="boot-photo" src="./ui/assets/arc-lamp.webp" width="1254" height="1254" alt="The fictional orange Arc table lamp in a lilac studio."></noscript>
       <p>In the reservation rehearsal, a simulated merchant can accept a request for one fictional lamp at a fixed price for 24 hours. Nothing is due and no purchase takes place.</p>
       <p>In the separate demo-funded checkout, creating a demo hold sets aside demo funds and fixes your price for the Arc table lamp. This demo reserves no stock.</p>
+      <details id="map" open><summary>Rehearsal map</summary><dl>
+        <dt>Reservation desk → Reservation store → One-unit policy</dt><dd>The desk sends requests to the store, which applies the policy. Only merchant acceptance reserves the lamp and starts its 24 hours.</dd>
+        <dt>Funded checkout → Demo ledger</dt><dd>The checkout records simulated holds, purchases and refunds in its separate ledger. Card and wallet balances stay separate.</dd>
+        <dt>Scenario report → Model fixtures</dt><dd>The report reads 64 illustrative card scenarios from its bundled data. It needs no saved shopper history.</dd>
+      </dl></details>
       <div class="boot-help"><p>The hold has no automatic expiry. After the wait, choose <strong>Complete purchase</strong>, then <strong>Confirm purchase</strong> to buy. You can cancel any time before buying.</p>
         <p>Enable JavaScript to choose a waiting period and try checkout. No money moves.</p>
         <p>In the separate report model, S$100 held for seven days at an assumed 4% annual rate earns about S$0.0767 gross. The shopper’s modeled cancellation share is S$0.06. The checkout simulation pays no interest.</p></div>

@@ -157,7 +157,7 @@ class Run:
             print(record['failure'], file=sys.stderr, flush=True)
 
 KEY = 'delayedbuy.sandbox.v1'
-ROUTES = ['report', 'home', 'how', 'checkout', 'customer', 'merchant', 'reservation']
+ROUTES = ['map', 'report', 'home', 'how', 'checkout', 'customer', 'merchant', 'reservation']
 DAY_MS = 86_400_000
 
 
@@ -368,6 +368,56 @@ def landing_to_hold(page, base):
     expect(wait).to_have_value('7')
     assert len(actions(stored(page))) == before + 1
     return {'wait_days': 7, 'new_holds': 1, 'dismissed_without_refund': True}
+
+
+def rehearsal_map(page, base):
+    page.emulate_media(reduced_motion='reduce')
+    expect(page.get_by_role('heading', name='One-unit policy')).to_be_visible()
+    before = page.locator('.map-svg').inner_html()
+    page.get_by_role('button', name='Rotate right').press('Enter')
+    assert before != page.locator('.map-svg').inner_html()
+    page.get_by_role('button', name='Reset view').click()
+    assert before == page.locator('.map-svg').inner_html()
+    page.get_by_role('button', name='Reservation store').press('Space')
+    expect(page.locator('.map-note h2')).to_have_text('Reservation store')
+    page.locator('.map-data summary').click()
+    module = json.loads(page.locator('.map-data pre').inner_text())['data']['module']
+    assert [node['id'] for node in module['dependencies']] == ['policy']
+    assert page.locator('.map-note a').last.get_attribute('href') == '#map/store'
+    visit(page, base, 'report')
+    assert page.evaluate('indexedDB.databases().then(x => x.length)') == 0
+    return module
+
+
+def map_during_checkout_update(page, base):
+    visit(page, base, 'customer')
+    before = stored(page)['now']
+    visit(page, base, 'map/policy')
+    page.get_by_role('button', name='Scenario report').click()
+    page.get_by_role('button', name='Rotate right').click()
+    drawing = page.locator('.map-svg').inner_html()
+    page.locator('.map-data summary').click()
+
+    # The app subscribed first. Wait for its queued store transaction to finish
+    # after the other tab broadcasts, then inspect the graph before navigating.
+    page.evaluate("""key => {
+        const observer = new BroadcastChannel(key);
+        observer.onmessage = () => {
+            observer.close();
+            navigator.locks.request(key, () => { window.clockRefreshObserved = true; });
+        };
+    }""", KEY)
+    merchant = page.context.new_page()
+    visit(merchant, base, 'merchant')
+    merchant.locator('[data-action=advance]').click()
+    expect(merchant.locator('#feedback')).to_contain_text('Demo clock advanced')
+    page.wait_for_function('() => window.clockRefreshObserved === true')
+    expect(page.locator('.map-note h2')).to_have_text('Scenario report')
+    assert page.locator('.map-svg').inner_html() == drawing
+    expect(page.locator('.map-data pre')).to_be_visible()
+    visit(page, base, 'checkout')
+    checkout_answers(page, 'S$180.00', before + 3 * DAY_MS)
+    return {'selected_module': 'report', 'orientation_preserved': True, 'checkout_clock_updated': True}
 
 
 def report_shortcut(page, base):
@@ -758,6 +808,9 @@ def main():
         for w, h in [(320, 740), (390, 844), (768, 1024), (1280, 850)]:
             run.case(f'Route fit, labels and checkout fields at {w}px', partial(viewport_check, screenshots=args.screenshots), w, h, w < 600)
         run.case('Mobile hold setup, confirmation and Back', landing_to_hold, 390, 844, True)
+        run.case('Offline rehearsal map and independent report', rehearsal_map, start_route='map/policy')
+        run.case('Static rehearsal paths remain readable if the app fails to start', map_without_app_startup, start_route='map')
+        run.case('Rehearsal map preserves selection and orientation when another tab updates checkout', map_during_checkout_update)
         run.case('Keyboard scenario shortcut and offline CSV', report_shortcut)
         run.case('Mobile menu opens, navigates and closes', mobile_navigation, 390, 844, True)
         run.case('Scenario report thresholds and accessible controls', report_interaction)
@@ -789,27 +842,30 @@ def main():
             file_mode = Run(browser, standalone_path.as_uri())
             file_mode.case('Standalone HTML opened directly as file://', standalone_check)
             file_mode.case('Standalone file reservation lifecycle', reservation_journey, start_route='reservation')
+            file_mode.case('Static rehearsal map from disk without JavaScript', no_script_explanation,
+                           javascript=False, start_route='map')
             loopback = Run(browser, base + 'delayedbuy-demo.html')
             loopback.case('Identical standalone HTML served alone on loopback', standalone_check)
             loopback.case('Standalone hold with browser storage unavailable', standalone_without_storage)
             loopback.case('Standalone explanation without JavaScript', no_script_explanation, javascript=False)
             loopback.case('Standalone scenario shortcut and offline CSV', report_shortcut)
             loopback.case('Standalone reservation lifecycle with no funded ledger', reservation_journey, start_route='reservation')
+            loopback.case('Portable rehearsal map and independent report', rehearsal_map, start_route='map/policy')
             report['standalone'] = {
                 'file': standalone_path.name, 'sha256': hashlib.sha256(standalone_path.read_bytes()).hexdigest(),
                 'unexpected_request_attempts': file_mode.attempts + loopback.attempts,
                 'direct_file': file_mode.cases[0], 'loopback': loopback.cases[0],
                 'without_storage': loopback.cases[1], 'without_javascript': loopback.cases[2],
                 'scenario_download': loopback.cases[3], 'direct_file_reservation': file_mode.cases[1],
-                'reservation': loopback.cases[4]}
+                'reservation': loopback.cases[4], 'map': loopback.cases[5], 'file_static_map': file_mode.cases[2]}
         browser.close()
     OUTPUT.parent.mkdir(parents=True, exist_ok=True)
     OUTPUT.write_text(json.dumps(report, indent=2, ensure_ascii=False) + '\n', encoding='utf-8')
     print(f'{passed}/{len(run.cases)} passed. Receipt: {OUTPUT}')
     if args.standalone:
         standalone = report['standalone']
-        required = ('loopback', 'without_storage', 'without_javascript', 'scenario_download', 'reservation')
-        direct = ('direct_file', 'direct_file_reservation')
+        required = ('loopback', 'without_storage', 'without_javascript', 'scenario_download', 'reservation', 'map')
+        direct = ('direct_file', 'direct_file_reservation', 'file_static_map')
         if any(standalone[key]['status'] == 'failed' for key in direct) or any(standalone[key]['status'] != 'passed' for key in required):
             return 1
     return 0 if passed == len(run.cases) else 1
@@ -952,6 +1008,9 @@ def merchant_rehearsal(page, base):
 
 
 def no_script_explanation(page, base):
+    for path in ('Reservation desk → Reservation store → One-unit policy',
+                 'Funded checkout → Demo ledger', 'Scenario report → Model fixtures'):
+        expect(page.get_by_text(path, exact=True)).to_be_visible()
     expect(page.locator('main .boot-help p').first).to_be_visible()
     expect(page.locator('main')).to_contain_text('Enable JavaScript to choose a waiting period')
     expect(page.locator('main')).to_contain_text('The checkout simulation pays no interest')
@@ -960,7 +1019,13 @@ def no_script_explanation(page, base):
         expect(page.locator('main')).to_contain_text(term)
     expect(page.locator('main')).not_to_contain_text('Loading')
     expect(page.locator('#checkout-form')).to_have_count(0)
-    return {'static_explanation_visible': True}
+    return {'static_explanation_visible': True, 'architecture_paths_visible': 3}
+
+
+def map_without_app_startup(page, base):
+    page.route('**/ui/app.js', lambda route: route.fulfill(content_type='text/javascript', body=''))
+    page.reload()
+    return no_script_explanation(page, base)
 
 
 def standalone_without_storage(page, base):

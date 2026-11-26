@@ -109,6 +109,7 @@ def reservation_journey(page, base, funded_raw=None):
     expect(receipt(page, first)).to_contain_text('S$180.00')
     page.locator('[data-res-action=advance][data-hours="1"]').click()
     assert_metric(page, 'timeHeldMs', 3_600_000)
+    expect(page.locator('[data-res-remaining]')).to_have_text('23 hr 0 min remaining')
     action(page, 'return', first).click()
     expect(receipt(page, first)).to_have_attribute('data-status', 'returned')
     expect(receipt(page, first)).to_contain_text('No sale was recorded')
@@ -151,6 +152,12 @@ def reservation_journey(page, base, funded_raw=None):
     page.get_by_text('Request history', exact=True).click()
     history = page.locator('#res-history tbody tr')
     expect(history).to_have_count(len(cases))
+    outcome = page.get_by_label('Filter by outcome')
+    outcome.select_option('returned')
+    expect(page.locator('#res-history tbody tr:visible')).to_have_count(1)
+    outcome.select_option('active')
+    expect(page.locator('[data-res-visible]')).to_have_text('0 of 5 requests shown.')
+    outcome.select_option('')
     rows = []
     for request_id, shopper, price, status in cases:
         row = page.locator(f'#res-history tbody tr[data-request-id="{request_id}"]')
