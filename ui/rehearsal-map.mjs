@@ -15,6 +15,19 @@ const modules = [
     detail:'Two committed CSV inputs supply the offline report. Its illustrations can be inspected independently of browser history.'}
 ];
 const edges = [['interface','store','saves requests through'],['store','policy','applies'],['checkout','ledger','records simulated movements in'],['report','fixtures','reads']];
+const paths = {
+  reservation: {name:'Reservation', color:'#ffa375'},
+  checkout: {name:'Demo funds', color:'#bbacff'},
+  report: {name:'Scenarios', color:'#9ae3c3'}
+};
+function pathFor(node) {
+  return paths[node.route === 'merchant' ? 'checkout' : node.route];
+}
+// On a narrow plot, separate the three paths into horizontal bands.
+const compactPositions = {
+  interface:[-157,-78], store:[0,-119], policy:[157,-72],
+  checkout:[-130,4], ledger:[134,-6], report:[-134,93], fixtures:[134,84]
+};
 const namespace = 'http://www.w3.org/2000/svg';
 
 function svgElement(name, attributes) {
@@ -29,46 +42,97 @@ export function mountRehearsalMap(root, startingId) {
   root.innerHTML = `<div class="frame workspace map-page"><a class="backlink" href="#home">← Back to home</a>
     <header><p class="kicker">DelayedBuy / Architecture</p><h1>The rehearsal map.</h1>
     <p class="intro">Trace the one-unit reservation, demo funds and report from each interface to its rules and data.</p></header>
-    <div class="map-grid"><section class="map-plot" aria-label="Interactive dependency map">
-    <svg class="map-svg" viewBox="-275 -175 550 350" role="img" aria-label="Seven modules in three independent paths. Select modules in the list below."></svg>
-    <div class="map-controls" aria-label="Map orientation"><button type="button" data-turn="-1" aria-label="Rotate left">←</button>
+    <div class="map-grid"><div><section class="map-plot" aria-label="Interactive dependency map">
+    <div class="map-legend" aria-label="Paths">
+      ${Object.values(paths).map(path=>'<span style="--path:'+path.color+'">'+path.name+'</span>').join('')}
+    </div>
+    <svg class="map-svg" role="img" aria-label="Seven modules in three independent paths. Arrows point to dependencies. Select a module to inspect it."></svg>
+    <div class="map-controls" aria-label="Map orientation"><p>Drag to rotate</p><button type="button" data-turn="-1" aria-label="Rotate left">←</button>
     <button type="button" data-turn="1" aria-label="Rotate right">→</button><button type="button" data-reset>Reset view</button></div></section>
-    <section class="map-note" aria-live="polite" aria-atomic="true"></section></div>
-    <fieldset class="map-picker"><legend>Inspect a module</legend></fieldset>
     <details class="map-data"><summary>Inspect map data (JSON)</summary>
-    <p>This read-only response describes the selected module and its dependencies.</p><pre></pre></details></div>`;
+    <p>This read-only response describes the selected module and its dependencies.</p><pre></pre></details></div>
+    <aside class="map-aside"><section class="map-note" aria-live="polite" aria-atomic="true"></section>
+    <fieldset class="map-picker"><legend>Inspect another module</legend></fieldset></aside></div></div>`;
   const plot = root.querySelector('.map-svg'), note = root.querySelector('.map-note');
   const picker = root.querySelector('.map-picker');
-  function point(node) {
-    const x = node.x*Math.cos(yaw) + node.z*Math.sin(yaw);
-    const z = node.z*Math.cos(yaw) - node.x*Math.sin(yaw);
-    const y = node.y*Math.cos(pitch) - z*Math.sin(pitch);
-    const scale = 650 / (650 - (z*Math.cos(pitch)+node.y*Math.sin(pitch)));
-    return {x:x*scale,y:y*scale,scale};
+  function point(node, width, height) {
+    const [baseX,baseY] = width < 460 ? compactPositions[node.id] : [node.x,node.y];
+    const x = baseX*Math.cos(yaw) + node.z*Math.sin(yaw);
+    const z = node.z*Math.cos(yaw) - baseX*Math.sin(yaw);
+    const y = baseY*Math.cos(pitch) - z*Math.sin(pitch);
+    const scale = 650 / (650 - (z*Math.cos(pitch)+baseY*Math.sin(pitch)));
+    return {x:width/2 + x*scale*(width-82)/450, y:height/2 + y*scale*(height-70)/280, scale};
   }
+  const labelBounds = new Map();
   function draw() {
-    const points = new Map(modules.map(node => [node.id,point(node)]));
+    const width=plot.clientWidth, height=plot.clientHeight;
+    if (!width || !height) return;
+    plot.setAttribute('viewBox', '0 0 '+width+' '+height);
+    const points = new Map(modules.map(node => [node.id,point(node,width,height)]));
     const scene = document.createDocumentFragment();
     for (const [from,to] of edges) {
       const a=points.get(from), b=points.get(to);
-      scene.append(svgElement('line',{x1:a.x,y1:a.y,x2:b.x,y2:b.y,class:[from,to].includes(selected.id)?'map-active':''}));
+      const color=pathFor(modules.find(node=>node.id===from)).color;
+      const angle=Math.atan2(b.y-a.y,b.x-a.x)*180/Math.PI;
+      const x=a.x+(b.x-a.x)*0.56, y=a.y+(b.y-a.y)*0.56;
+      scene.append(svgElement('line',{x1:a.x,y1:a.y,x2:b.x,y2:b.y,stroke:color,class:[from,to].includes(selected.id)?'map-active':''}));
+      scene.append(svgElement('path',{d:'M-5,-4 L4,0 -5,4',fill:'none',stroke:color,'stroke-width':2.5,
+        transform:'translate('+x+' '+y+') rotate('+angle+')'}));
     }
-    for (const node of [...modules].sort((a,b)=>points.get(a.id).scale-points.get(b.id).scale)) {
-      const p=points.get(node.id);
-      const g=svgElement('g',{'data-module':node.id,transform:'translate('+p.x+' '+p.y+') scale('+p.scale+')',class:node===selected?'map-active':''});
-      const label=svgElement('text',{y:23,'text-anchor':'middle'});
-      label.textContent=node.label;
-      g.append(svgElement('circle',{r:15,class:'map-hit'}),svgElement('circle',{r:6}),label);
+    const nodes=[...modules].sort((a,b)=>points.get(a.id).scale-points.get(b.id).scale);
+    for (const node of nodes) {
+      const p=points.get(node.id), color=pathFor(node).color;
+      const g=svgElement('g',{'data-module':node.id,transform:'translate('+p.x+' '+p.y+')'});
+      const radius=6*p.scale;
+      g.append(svgElement('circle',{r:20,fill:'transparent'}));
+      if (node===selected) g.append(svgElement('circle',{r:radius+6,stroke:color,class:'map-halo'}));
+      g.append(svgElement('circle',{r:radius,fill:color,stroke:'#2b2531','stroke-width':2}));
       scene.append(g);
     }
+    // Keep text in screen pixels. Fit labels around the projected points as the view rotates.
+    const occupied=[...points.values()].map(p=>({x:p.x-9,y:p.y-9,w:18,h:18}));
     plot.replaceChildren(scene);
+    for (const node of [selected,...nodes.filter(node=>node!==selected)]) {
+      const p=points.get(node.id);
+      const label=svgElement('text',{'data-module':node.id,'text-anchor':'middle',class:node===selected?'map-active':''});
+      label.textContent=node.label;
+      plot.append(label);
+      if (!labelBounds.has(node.id)) {
+        const box=label.getBBox();
+        labelBounds.set(node.id,{w:box.width+8,h:box.height+4,top:box.y-2});
+      }
+      const {w,h,top}=labelBounds.get(node.id);
+      const x=Math.max(w/2+4,Math.min(width-w/2-4,p.x));
+      const positions=[p.y+26,p.y-17];
+      for (const box of occupied) {
+        positions.push(box.y-top-h-1,box.y+box.h-top+1);
+      }
+      let best;
+      for (const position of positions) {
+        const y=Math.max(2-top,Math.min(height-2-top-h,position));
+        const box={x:x-w/2,y:y+top,w,h,label:true};
+        const cost=occupied.reduce((sum,b)=>sum+Math.max(0,Math.min(box.x+w,b.x+b.w)-Math.max(box.x,b.x))*
+          Math.max(0,Math.min(box.y+h,b.y+b.h)-Math.max(box.y,b.y))*(b.label?1000:10),0)
+          + Math.abs(y-(p.y+6));
+        if (!best || cost<best.cost) best={y,box,cost};
+      }
+      if (Math.abs(best.y-p.y)>31 || Math.abs(x-p.x)>24) {
+        const endY=best.y>p.y ? best.y-16 : best.y+5;
+        const lead=svgElement('line',{x1:p.x,y1:p.y,x2:x,y2:endY,class:'map-leader'});
+        plot.insertBefore(lead,plot.firstChild);
+      }
+      occupied.push(best.box);
+      label.setAttribute('x',x);
+      label.setAttribute('y',best.y);
+    }
   }
   function inspect(node) {
     selected=node;
     const relationships=edges.filter(([from,to])=>from===node.id || to===node.id);
     const name=id=>modules.find(item=>item.id===id).label;
     const statements=relationships.map(([from,to,verb])=>name(from)+' '+verb+' '+name(to)+'.');
-    note.innerHTML='<p class="kicker">Module detail</p><h2>'+node.label+'</h2><p>'+node.detail+'</p><p class="map-edge">'+statements.join(' ')+'</p>'+
+    note.style.setProperty('--path',pathFor(node).color);
+    note.innerHTML='<p class="kicker">'+pathFor(node).name+' path</p><h2>'+node.label+'</h2><p>'+node.detail+'</p><p class="map-edge">'+statements.join(' ')+'</p>'+
       '<a href="#'+node.route+'">Open demo view →</a><a href="https://github.com/EauDoon/DelayedBuy/blob/main/'+node.file+'">View source · '+node.file+'</a>'+
       '<a href="#map/'+node.id+'">Link to this module</a>';
     root.querySelector('.map-data pre').textContent=JSON.stringify({data:{module:{id:node.id,name:node.label,path:node.file,
@@ -108,4 +172,7 @@ export function mountRehearsalMap(root, startingId) {
   });
   plot.addEventListener('lostpointercapture',()=>{drag=undefined;});
   inspect(selected);
+  const sizeObserver = new ResizeObserver(draw);
+  sizeObserver.observe(plot);
+  return () => sizeObserver.disconnect();
 }

@@ -389,6 +389,31 @@ def rehearsal_map(page, base):
     return module
 
 
+def narrow_map_labels(page, base):
+    plot = page.locator('.map-svg')
+    labels = plot.locator('text')
+    expect(labels).to_have_count(7)
+    for _ in range(16):
+        boxes = labels.evaluate_all("""elements => elements.map(el => {
+            const {x, y, width, height} = el.getBBox();
+            return {x, y, width, height, size: parseFloat(getComputedStyle(el).fontSize)};
+        })""")
+        bounds = plot.bounding_box()
+        for index, box in enumerate(boxes):
+            assert box['size'] >= 14
+            assert 0 <= box['x'] <= bounds['width'] - box['width']
+            assert 0 <= box['y'] <= bounds['height'] - box['height']
+            for other in boxes[index+1:]:
+                dx = min(box['x'] + box['width'], other['x'] + other['width']) - max(box['x'], other['x'])
+                dy = min(box['y'] + box['height'], other['y'] + other['height']) - max(box['y'], other['y'])
+                assert dx <= 1 or dy <= 1, 'Module labels overlap'
+        page.get_by_role('button', name='Rotate right').press('Enter')
+    page.get_by_role('button', name='Reset view').tap()
+    plot.locator('text[data-module="ledger"]').tap()
+    expect(page.locator('.map-note h2')).to_have_text('Demo ledger')
+    return {'orientations': 16, 'visible_labels': 7, 'touch_selected': 'ledger'}
+
+
 def map_during_checkout_update(page, base):
     visit(page, base, 'customer')
     before = stored(page)['now']
@@ -809,6 +834,8 @@ def main():
             run.case(f'Route fit, labels and checkout fields at {w}px', partial(viewport_check, screenshots=args.screenshots), w, h, w < 600)
         run.case('Mobile hold setup, confirmation and Back', landing_to_hold, 390, 844, True)
         run.case('Offline rehearsal map and independent report', rehearsal_map, start_route='map/policy')
+        run.case('Graph labels stay readable through all rotations at 320px', narrow_map_labels,
+                 320, 740, True, start_route='map')
         run.case('Static rehearsal paths remain readable if the app fails to start', map_without_app_startup, start_route='map')
         run.case('Rehearsal map preserves selection and orientation when another tab updates checkout', map_during_checkout_update)
         run.case('Keyboard scenario shortcut and offline CSV', report_shortcut)
