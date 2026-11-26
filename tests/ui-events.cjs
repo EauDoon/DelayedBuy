@@ -10,7 +10,7 @@ const wait=()=>new Promise(r=>setImmediate(r));const main=node('#main'),dlg=node
 const kept=()=>JSON.parse(storage.get('delayedbuy.sandbox.v1')).ledger.actions;
 (async()=>{await wait();
 assert.match(main.innerHTML,/The price/);main.handlers.change({target:{matches:q=>q==='select[data-report]',dataset:{report:'apr'},value:'0'}});assert.match(node('#r-results').innerHTML,/S\$0\.0000/);console.log('passed report route and live control');
-route('#customer/ord_arc');node('#order-detail').dataset.order='ord_arc'; const count=kept().length;click('cancel');assert(dlg.open);route('#merchant');assert(!dlg.open);confirm();await wait();assert.equal(kept().length,count);console.log('passed stale dialog invalidation');
+assert.equal(storage.has('delayedbuy.sandbox.v1'), false);route('#customer/ord_arc');await wait();node('#order-detail').dataset.order='ord_arc'; const count=kept().length;click('cancel');assert(dlg.open);route('#merchant');assert(!dlg.open);confirm();await wait();assert.equal(kept().length,count);console.log('passed stale dialog invalidation');
 click('reset');assert(dlg.open);confirm();await wait();assert.equal(focused,main);assert.match(main.innerHTML,/Merchant ledger/);console.log('passed reset focus');
 route('#checkout');holdLock=true; const payment=main.handlers.submit({target:{id:'checkout-form',querySelector:()=>node('submit')},preventDefault(){}});route('#merchant');holdLock=false;release();await payment;assert.equal(kept().length,count+1);assert.equal(loc.hash,'#merchant');assert.match(main.innerHTML,/S\$360\.00/);console.log('passed queued save, preserved newer route and reconciled merchant view');
 })().catch(e=>{console.error(e);process.exitCode=1})

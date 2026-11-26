@@ -1,4 +1,4 @@
-# delayedbuy v1.3
+# delayedbuy
 
 Rehearse a 24-hour reservation for **one fictional Arc table lamp**. Shopper A or B requests the displayed SGD price with S$0 due. A simulated merchant reviews the request and can agree to hold the unit at that price. The 24 hours start at acceptance. Returning records a decision and releases the unit. The rehearsal creates no purchase.
 
@@ -6,7 +6,7 @@ Rehearse a 24-hour reservation for **one fictional Arc table lamp**. Shopper A o
 
 ## Rehearse the last unit
 
-The next rehearsal release separates pending and active requests from completed reservation outcomes. **Download current results (JSON)** captures the committed rehearsal at its displayed simulation time, without checkout data. The release check uses five simulated requests: three completed reservations, one return, and no sale.
+The browser separates pending and active requests from completed reservation outcomes. **Download current results (JSON)** captures the committed rehearsal at its displayed simulation time, without checkout data. The release check uses five simulated requests: three completed reservations, one return, and no sale.
 
 Open the [24-hour reservation rehearsal](https://eaudoon.github.io/DelayedBuy/#reservation). On a local server or in the downloadable HTML, use **24-hour reservation**.
 
@@ -20,6 +20,14 @@ The results show how many accepted reservations ended in a return visit and how 
 A rehearsal holds at most 1,000 events and reserves room to finish open requests. If another request no longer fits, finish the open requests, then use **Start a new rehearsal** and confirm. This archives the previous reservation history and starts with the original S$180 offer and no clock adjustment. **Download archived histories (JSON)** exports all prior rehearsals. Archives use the same storage as the reservation demo (browser, tab, or memory) and do not touch demo-funded checkout. If storage cannot keep the archive, the current rehearsal is retained.
 
 The browser suite below writes the rehearsal evidence to `evidence/browser-tests.json`. The five-request script exercises three acceptances, one shopper return, one cancellation and one merchant release, with one hour of total unit-time. Two other scripts race two merchant tabs for the last unit and leave an accepted request unanswered through its deadline. The expired reservation accounts for exactly 24 hours, even after a later reload.
+
+## Read the rehearsal map
+
+Open the [rehearsal map](https://eaudoon.github.io/DelayedBuy/#map) or choose **Rehearsal map** in the downloadable demo. Follow a connection from the reservation desk to the store that commits a request, then to the policy that fixes its price and expiry. The funded checkout and scenario report each have a separate path.
+
+Use the module buttons to inspect source paths and dependencies. Each module has a shareable link, a link into its demo view, and a local JSON representation. Drag the diagram or use the rotation buttons to change the view. Motion is entirely user-controlled. A checkout update in another tab preserves the selected module and view angle. The entry page and the downloaded HTML include the three paths as text whenever the interactive view cannot start.
+
+An active shopper card shows the time remaining on the simulated clock, rounded up to a minute. **Request history** can filter by outcome, including an empty result. Counts and JSON exports still cover all requests. Direct links into Report and Rehearsal map open independently of the saved checkout. Previously, loading the read-only report could initialize the funded demo store.
 
 ## Try the separate demo-funded checkout
 

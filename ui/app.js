@@ -2,6 +2,7 @@ import { applyAction, demoLedger, getView, validateLedger } from '../core/ledger
 import { reportPage, reportResults } from './report.mjs';
 import { mountReservation } from './reservation.mjs';
 import { icon } from './icons.js';
+import { mountRehearsalMap } from './rehearsal-map.mjs';
 import { mountLampStudio } from './lamp-studio.mjs';
 
 const DAY = 86_400_000;
@@ -15,7 +16,7 @@ const accountNames = { card_demo: 'Demo card', wallet_demo: 'Demo wallet', hold_
 const eventNames = { held: 'Hold funded', completed: 'Purchase completed', refunded: 'Principal returned' };
 const reportChoice = { basket:100, days:7, apr:4 };
 let navigationEpoch = 0;
-const pageNames = { reservation: '24-hour reservation', report:'The price of a pause', home: 'Sleep on it.', how: 'How it works', checkout: 'Start a demo hold', customer: 'Customer view', merchant: 'Merchant view' };
+const pageNames = { map: 'Rehearsal map', reservation: '24-hour reservation', report:'The price of a pause', home: 'Sleep on it.', how: 'How it works', checkout: 'Start a demo hold', customer: 'Customer view', merchant: 'Merchant view' };
 const main = document.querySelector('#main');
 const feedback = document.querySelector('#feedback');
 const dialog = document.querySelector('#confirm-dialog');
@@ -159,6 +160,9 @@ function uniqueId(prefix) {
 function route() {
   const [name, id] = location.hash.slice(1).split('/');
   return { page: name && Object.hasOwn(pageNames, name) ? name : 'home', id };
+}
+function usesFundedState(page) {
+  return !['reservation', 'map', 'report'].includes(page);
 }
 function statusOf(order) {
   if (order.eligible) return { key: 'ready', label: 'Ready to decide' };
@@ -355,6 +359,7 @@ function render() {
     return;
   }
   leaveReservation();
+  if (page === 'map') { mountRehearsalMap(main, id); return; }
   if (page === 'report') { main.innerHTML = reportPage(reportChoice.basket, reportChoice.days, reportChoice.apr); return; }
   if (loadError) {
     main.innerHTML = '<div class="frame workspace"><section class="panel error-panel"><div class="kicker">Simulation</div><h1>Saved demo unavailable.</h1><p>The browser could not read the saved simulation. Reset the sample data to start again.</p>' + resetRow() + '</section></div>';
@@ -398,16 +403,15 @@ function onRouteChange() {
 }
 async function displayRoute(initial) {
   const epoch = navigationEpoch;
-  if (route().page !== 'reservation') {
-    if (stopReservation) {
-      leaveReservation();
-      main.replaceChildren();
-    }
-    if (!fundedReady) {
-      fundedBoot ??= loadFundedState();
-      await fundedBoot;
-      if (epoch !== navigationEpoch) return;
-    }
+  const {page} = route();
+  if (page !== 'reservation' && stopReservation) {
+    leaveReservation();
+    main.replaceChildren();
+  }
+  if (!fundedReady && usesFundedState(page)) {
+    fundedBoot ??= loadFundedState();
+    await fundedBoot;
+    if (epoch !== navigationEpoch) return;
   }
   render();
   if (initial) {
@@ -611,6 +615,7 @@ async function refreshSharedState() {
     loadError = false;
   }
   catch { loadError = true; }
+  if (!usesFundedState(route().page)) return;
   const wasReviewing = dialog.open;
   if (wasReviewing) dialog.close();
   render();

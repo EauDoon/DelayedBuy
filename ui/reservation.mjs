@@ -27,6 +27,10 @@ function duration(ms) {
   if (minutes < 60) return minutes + ' min ' + seconds % 60 + ' sec';
   return Math.floor(minutes / 60) + ' hr ' + minutes % 60 + ' min';
 }
+function timeLeft(expiresAt, now) {
+  const minutes = Math.max(0, Math.ceil((expiresAt - now) / 60000));
+  return Math.floor(minutes / 60) + ' hr ' + minutes % 60 + ' min remaining';
+}
 function decisionButton(type, label, request, disabled = false) {
   return '<button type="button" class="btn ' + (type === 'accept' ? 'orange' : 'outline') + '" id="res-' + type + '-' + request.id +
     '" data-res-action="' + type + '" data-request-id="' + request.id + '"' + (disabled ? ' disabled' : '') + '>' + label + '</button>';
@@ -51,7 +55,7 @@ function shopperCard(shopper, view) {
       '<p>The current offer is ' + money(view.priceCents) + '. Withdraw this request to request the new price.</p>') +
       decisionButton('withdraw', 'Withdraw request', request);
   } else if (request?.status === 'active') {
-    actions = '<p>One unit is held at your fixed price. Recording a return visit releases the unit. No sale is recorded.</p>' +
+    actions = '<p><strong data-res-remaining>' + timeLeft(request.expiresAt, view.now) + '</strong></p><p>One unit is held at your fixed price. Recording a return visit releases the unit. No sale is recorded.</p>' +
       '<div class="action-row">' + decisionButton('return', 'Record shopper return', request) + decisionButton('cancel', 'Cancel reservation', request) + '</div>';
   } else {
     actions = '<button type="button" class="btn outline" id="res-request-' + shopper + '" data-res-action="request" data-shopper="' +
@@ -94,6 +98,9 @@ function evidence(view) {
     view.requests.filter(r => r.status === 'pending').length + ' pending · ' + (1 - view.available) + ' active.</p>' +
     '<button type="button" class="btn outline" data-res-action="snapshot">Download current results (JSON)</button>' +
     '<dl class="res-metrics">' + cells + '</dl>' + (rows ? '<details id="res-history"><summary id="res-history-toggle">Request history</summary>' +
+    '<label class="res-filter" for="res-history-filter">Filter by outcome <select id="res-history-filter"><option value="">All outcomes</option>' +
+    Object.entries(labels).map(([key,label]) => '<option value="' + key + '">' + label + '</option>').join('') +
+    '</select></label><p data-res-visible role="status"></p>' +
     '<div class="res-table-wrap" role="region" aria-label="Request history table" tabindex="0" id="res-history-table"><table><thead><tr><th scope="col">Shopper</th>' +
     '<th scope="col">Requested · SGT</th><th scope="col">Requested price</th><th scope="col">Outcome</th><th scope="col">Unit-time</th></tr></thead><tbody>' +
     rows + '</tbody></table></div></details>' : '') + '</section>';
@@ -167,6 +174,25 @@ export function mountReservation(main, announce) {
   let attached = true, writing = false, needsRefresh = false, sequence = 0, timer, signature, displayed;
   const current = () => attached && root.isConnected && location.hash.slice(1).split('/')[0] === 'reservation';
 
+  let historyFilter = '';
+  function filterHistory() {
+    const control = root.querySelector('#res-history-filter');
+    if (!control) return;
+    control.value = historyFilter;
+    const rows = root.querySelectorAll('#res-history tbody tr');
+    let visible = 0;
+    for (const row of rows) {
+      row.hidden = Boolean(historyFilter && row.dataset.status !== historyFilter);
+      if (!row.hidden) visible++;
+    }
+    root.querySelector('[data-res-visible]').textContent = visible + ' of ' + rows.length + ' requests shown.';
+  }
+  root.addEventListener('change', event => {
+    if (event.target.id === 'res-history-filter') {
+      historyFilter = event.target.value;
+      filterHistory();
+    }
+  });
   function show(view) {
     displayed = view;
     const nextSignature = JSON.stringify([view.priceCents, view.available, view.requests, view.history, view.archiveCount]);
@@ -177,6 +203,7 @@ export function mountReservation(main, announce) {
       const historyOpen = root.querySelector('#res-history')?.open;
       root.innerHTML = workspace(view);
       signature = nextSignature;
+      filterHistory();
       const history = root.querySelector('#res-history');
       if (history && historyOpen) history.open = true;
       if (focusId) {
@@ -192,6 +219,8 @@ export function mountReservation(main, announce) {
       held.dataset.value = view.metrics.timeHeldMs;
       held.textContent = duration(view.metrics.timeHeldMs);
       const active = view.requests.find(r => r.status === 'active');
+      const remaining = root.querySelector('[data-res-remaining]');
+      if (remaining && active) remaining.textContent = timeLeft(active.expiresAt, view.now);
       const logTime = root.querySelector('#res-history tr[data-status="active"] td:last-child');
       if (logTime && active) logTime.textContent = duration(view.now - active.acceptedAt);
     }
