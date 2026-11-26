@@ -41,7 +41,7 @@ let feedbackTimer;
 let fundedBoot;
 let fundedReady = false;
 let stopReservation;
-let stopLampStudio;
+let stopVisual;
 
 function escapeHtml(value) {
   return String(value).replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char]);
@@ -347,8 +347,8 @@ function merchantPage(view) {
 }
 function render() {
   const {page, id} = route();
-  stopLampStudio?.();
-  stopLampStudio = undefined;
+  stopVisual?.();
+  stopVisual = undefined;
   document.title = 'delayedbuy · ' + pageNames[page];
   for (const link of menu.querySelectorAll('a')) {
     if (link.hash === '#' + page) link.setAttribute('aria-current', 'page');
@@ -359,7 +359,7 @@ function render() {
     return;
   }
   leaveReservation();
-  if (page === 'map') { mountRehearsalMap(main, id); return; }
+  if (page === 'map') { stopVisual = mountRehearsalMap(main, id); return; }
   if (page === 'report') { main.innerHTML = reportPage(reportChoice.basket, reportChoice.days, reportChoice.apr); return; }
   if (loadError) {
     main.innerHTML = '<div class="frame workspace"><section class="panel error-panel"><div class="kicker">Simulation</div><h1>Saved demo unavailable.</h1><p>The browser could not read the saved simulation. Reset the sample data to start again.</p>' + resetRow() + '</section></div>';
@@ -367,7 +367,7 @@ function render() {
   }
   if (page === 'home' || page === 'how') {
     main.innerHTML = homePage();
-    stopLampStudio = mountLampStudio(main);
+    stopVisual = mountLampStudio(main);
   }
   else if (page === 'checkout') main.innerHTML = checkoutPage();
   else {
