@@ -414,6 +414,46 @@ def narrow_map_labels(page, base):
     return {'orientations': 16, 'visible_labels': 7, 'touch_selected': 'ledger'}
 
 
+def map_swipe_and_first_tap(page, base):
+    plot = page.locator('.map-svg')
+    plot.scroll_into_view_if_needed()
+    box = plot.bounding_box()
+    x, y = box['x'] + box['width'] * .32, box['y'] + box['height'] * .65
+    cdp = page.context.new_cdp_session(page)
+
+    def touch(kind, at_x=0, at_y=0):
+        points = [] if kind == 'touchEnd' else [{'x': at_x, 'y': at_y}]
+        cdp.send('Input.dispatchTouchEvent', {'type': kind, 'touchPoints': points})
+
+    def swipe(dx, dy):
+        touch('touchStart', x, y)
+        for step in range(1, 6):
+            time.sleep(.018)
+            touch('touchMove', x + dx * step / 5, y + dy * step / 5)
+        touch('touchEnd')
+
+    page.evaluate("""() => {
+        window.resetTaps = 0;
+        document.querySelector('[data-reset]').addEventListener('click', () => { window.resetTaps++; });
+    }""")
+    initial = plot.inner_html()
+    button = page.get_by_role('button', name='Reset view').bounding_box()
+    swipe(80, 2)
+    assert plot.inner_html() != initial
+    time.sleep(.05)
+    touch('touchStart', button['x'] + button['width']/2, button['y'] + button['height']/2)
+    time.sleep(.065)
+    touch('touchEnd')
+    page.wait_for_function('() => window.resetTaps === 1')
+    assert plot.inner_html() == initial
+    expect(page.locator('.map-note h2')).to_have_text('Reservation store')
+    scroll_y = page.evaluate('scrollY')
+    swipe(1, -125)
+    page.wait_for_function('start => scrollY > start + 30', arg=scroll_y)
+    cdp.detach()
+    return {'first_tap_reset': True, 'vertical_scroll': True}
+
+
 def map_during_checkout_update(page, base):
     visit(page, base, 'customer')
     before = stored(page)['now']
@@ -836,6 +876,8 @@ def main():
         run.case('Offline rehearsal map and independent report', rehearsal_map, start_route='map/policy')
         run.case('Graph labels stay readable through all rotations at 320px', narrow_map_labels,
                  320, 740, True, start_route='map')
+        run.case('First control tap follows a fast horizontal orbit while vertical swipes scroll the page',
+                 map_swipe_and_first_tap, 360, 800, True, start_route='map/store')
         run.case('Static rehearsal paths remain readable if the app fails to start', map_without_app_startup, start_route='map')
         run.case('Rehearsal map preserves selection and orientation when another tab updates checkout', map_during_checkout_update)
         run.case('Keyboard scenario shortcut and offline CSV', report_shortcut)

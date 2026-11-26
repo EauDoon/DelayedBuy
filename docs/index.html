@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-3YKMwUmKJ5+rBqBLrcwxFmdyAs5O8r7HSqcyUCzNCoo='; style-src 'unsafe-inline'; img-src data:; font-src data:; connect-src 'none'; form-action 'none'; base-uri 'none'; object-src 'none'">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-By3n+pbJNgPqKWnqyE5rQc7qYct9KWoMiWSOg08Yeb8='; style-src 'unsafe-inline'; img-src data:; font-src data:; connect-src 'none'; form-action 'none'; base-uri 'none'; object-src 'none'">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#faf8f2">
   <meta name="description" content="Rehearse a no-payment reservation for one fictional lamp at a fixed price for 24 hours, or explore the separate demo-funded checkout.">
@@ -2128,7 +2128,7 @@ dialog::backdrop {
   display: block;
   width: 100%;
   height: clamp(18rem, 28vw, 25rem);
-  touch-action: pan-y;
+  touch-action: pan-y pinch-zoom;
   cursor: grab;
   background-image: radial-gradient(#b6a5b640 .8px, transparent 1px);
   background-size: 16px 16px;
@@ -3397,6 +3397,22 @@ function mountRehearsalMap(root, startingId) {
     drag={id:event.pointerId,x:event.clientX,y:event.clientY,yaw,pitch,initial:event.target.closest('[data-module]')?.dataset.module};
     plot.setPointerCapture(event.pointerId);
   });
+  plot.addEventListener('touchstart',start=>{
+    if (start.touches.length !== 1) return;
+    // Touch events keep their first target even when an SVG redraw detaches it.
+    const target = start.target;
+    const origin = start.touches[0];
+    const listeners = new AbortController();
+    const options = {signal:listeners.signal, passive:true};
+    target.addEventListener('touchmove',event=>{
+      if (event.touches.length !== 1 || !event.cancelable) return;
+      const touch = event.touches[0];
+      const dx = Math.abs(touch.clientX - origin.clientX);
+      if (dx > 5 && dx > Math.abs(touch.clientY - origin.clientY)) event.preventDefault();
+    }, {signal:listeners.signal, passive:false});
+    target.addEventListener('touchend',()=>listeners.abort(),options);
+    target.addEventListener('touchcancel',()=>listeners.abort(),options);
+  }, {passive:true});
   plot.addEventListener('pointermove',event=>{
     if(drag?.id!==event.pointerId) return;
     yaw=drag.yaw+(event.clientX-drag.x)*0.009;
