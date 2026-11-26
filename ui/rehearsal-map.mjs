@@ -159,6 +159,22 @@ export function mountRehearsalMap(root, startingId) {
     drag={id:event.pointerId,x:event.clientX,y:event.clientY,yaw,pitch,initial:event.target.closest('[data-module]')?.dataset.module};
     plot.setPointerCapture(event.pointerId);
   });
+  plot.addEventListener('touchstart',start=>{
+    if (start.touches.length !== 1) return;
+    // Touch events keep their first target even when an SVG redraw detaches it.
+    const target = start.target;
+    const origin = start.touches[0];
+    const listeners = new AbortController();
+    const options = {signal:listeners.signal, passive:true};
+    target.addEventListener('touchmove',event=>{
+      if (event.touches.length !== 1 || !event.cancelable) return;
+      const touch = event.touches[0];
+      const dx = Math.abs(touch.clientX - origin.clientX);
+      if (dx > 5 && dx > Math.abs(touch.clientY - origin.clientY)) event.preventDefault();
+    }, {signal:listeners.signal, passive:false});
+    target.addEventListener('touchend',()=>listeners.abort(),options);
+    target.addEventListener('touchcancel',()=>listeners.abort(),options);
+  }, {passive:true});
   plot.addEventListener('pointermove',event=>{
     if(drag?.id!==event.pointerId) return;
     yaw=drag.yaw+(event.clientX-drag.x)*0.009;

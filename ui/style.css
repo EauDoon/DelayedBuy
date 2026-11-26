@@ -2117,7 +2117,7 @@ dialog::backdrop {
   display: block;
   width: 100%;
   height: clamp(18rem, 28vw, 25rem);
-  touch-action: pan-y;
+  touch-action: pan-y pinch-zoom;
   cursor: grab;
   background-image: radial-gradient(#b6a5b640 .8px, transparent 1px);
   background-size: 16px 16px;
