@@ -1837,8 +1837,15 @@ dialog::backdrop {
     font-size: 10px
   }
 
+  /* The header must fit 320px with Arial-width fallback fonts, not only with the named fonts. */
   .brand {
-    font-size: 24px
+    font-size: 21px;
+    gap: 7px
+  }
+
+  .site-header .brand img {
+    width: 25px;
+    height: 25px
   }
 
   .nav-end {
@@ -1850,7 +1857,9 @@ dialog::backdrop {
   }
 
   .sim-badge {
-    font-size: 9px
+    font-size: 9px;
+    gap: 6px;
+    padding: 6px 7px
   }
 
   .customer-grid .timeline li {
