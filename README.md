@@ -4,6 +4,25 @@ Rehearse a 24-hour reservation for **one fictional Arc table lamp**. Shopper A o
 
 **Simulation only.** The two shopper labels, merchant decisions and unit are fixtures stored in this browser. No personal details, merchant agreement, live inventory, payment or external service is involved.
 
+## Start here
+
+DelayedBuy is a static browser demo of a shop holding one item at a fixed price for 24 hours while the shopper decides. It is for people who want to try that reservation flow, or read its state machine, without a server, an account or a payment.
+
+- **Try it in the browser:** open the [24-hour reservation rehearsal](https://eaudoon.github.io/DelayedBuy/#reservation). Nothing to install.
+- **Run it offline:** [download the single-file demo](https://github.com/EauDoon/DelayedBuy/raw/refs/heads/main/downloads/delayedbuy-demo.html) and open it in a browser.
+- **Run it from a clone:** `python3 -m http.server 4173 --bind 127.0.0.1`, then open <http://127.0.0.1:4173/>. Any free port works.
+- **Check it:** `node --test tests/*.test.mjs` runs the reservation and ledger rules in a few seconds, with no packages to install. The full list is under [Verify and package](#verify-and-package).
+
+| To do this | Read |
+| --- | --- |
+| Walk through request, acceptance, return and expiry | [Rehearse the last unit](#rehearse-the-last-unit) |
+| See how the modules connect | [Read the rehearsal map](#read-the-rehearsal-map) |
+| Try the older checkout that sets aside demo funds | [Try the separate demo-funded checkout](#try-the-separate-demo-funded-checkout) |
+| Compare the modeled cost of waiting | [The price of a pause](#the-price-of-a-pause) |
+| Find a file or rebuild the published page | [What's here](#whats-here) and [Verify and package](#verify-and-package) |
+
+The page under `docs/` and the file under `downloads/` are build outputs. Edit `index.html`, `ui/` or `core/`, then rebuild both with `python3 scripts/package_demo.py --standalone docs/index.html` and `cp docs/index.html downloads/delayedbuy-demo.html`.
+
 ## Rehearse the last unit
 
 The browser separates pending and active requests from completed reservation outcomes. **Download current results (JSON)** captures the committed rehearsal at its displayed simulation time, without checkout data. The release check uses five simulated requests: three completed reservations, one return, and no sale.
