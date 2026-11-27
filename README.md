@@ -1,3 +1,5 @@
+<p align="center"><img src=".github/assets/banner.svg" alt="DelayedBuy. A browser simulation of a 24-hour reservation for one fictional lamp: a shopper requests the displayed price, a simulated merchant accepts and holds the unit, and a return, cancellation or expiry releases it. No purchase is created. Shown as a lamp under a glass dome while 24 hour marks light around it, then the dome lifts." width="100%"></p>
+
 # delayedbuy
 
 Rehearse a 24-hour reservation for **one fictional Arc table lamp**. Shopper A or B requests the displayed SGD price with S$0 due. A simulated merchant reviews the request and can agree to hold the unit at that price. The 24 hours start at acceptance. Returning records a decision and releases the unit. The rehearsal creates no purchase.
